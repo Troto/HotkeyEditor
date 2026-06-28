@@ -1,0 +1,47 @@
+// Dev Container config — auto-detected by JetBrains Rider and VS Code from the
+// repo root. Reuses ClaudeDocker/docker-compose.yml as the single source of
+// truth (image, caps, ports, mounts, firewall), so nothing is duplicated.
+//
+// The IDE runs its backend INSIDE this sandboxed container. Rider requires
+// Docker Compose V2 (we use `docker compose`). The compose `command` keeps the
+// container alive; open a terminal once connected and run `claude`.
+{
+  // Display label in the IDE — derived from the opened project folder's name.
+  "name": "${localWorkspaceFolderBasename} (Claude Container)",
+  "dockerComposeFile": "../ClaudeDocker/docker-compose.yml",
+  "service": "claude-code",
+  "workspaceFolder": "/workspace",
+  "workspaceMount": "source=${localWorkspaceFolder}/.devcontainer,target=/tmp/rider-ignored-mount,type=bind", // It says it doesn't like this and it's not allowed because it makes no sense with the official spec but it doesn't matter because Rider uses it so it needs to be there.
+  "remoteUser": "claude",
+  // NOTE: don't add a postStartCommand to run the firewall — the compose
+  // `command` already runs it at container start (and that's the only place that
+  // also covers a plain `docker compose up`). Running it twice fails the second
+  // time, because a prior run leaves the OUTPUT policy at DROP.
+  "customizations": {
+    // --- JetBrains (Rider is the default backend) ---
+    // For JS/TS projects, switch to "WebStorm" or "IntelliJ".
+    // NOTE: the IDE downloads its backend + plugins into the container, so
+    // uncomment the JetBrains domains in ClaudeDocker/init-firewall.sh.
+    "jetbrains": {
+      "backend": "Rider",
+      // Claude Code plugin — installed into the backend on connect (needs the
+      // JetBrains domains allowlisted in init-firewall.sh, which they are).
+      "plugins": [
+        "com.anthropic.code.plugin"
+      ]
+    }
+    // ,
+    // // --- VS Code (also works with this same file) ---
+    // "vscode": {
+    //   "extensions": [
+    //     "anthropic.claude-code",
+    //     "eamodio.gitlens"
+    //   ],
+    //   "settings": {
+    //     "editor.formatOnSave": true,
+    //     "files.eol": "\n",
+    //     "terminal.integrated.defaultProfile.linux": "bash"
+    //   }
+    // }
+  }
+}

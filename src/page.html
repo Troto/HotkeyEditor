@@ -1,0 +1,1209 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AoE2:DE Hotkey Editor &amp; Converter</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; font: 14px/1.4 system-ui, Segoe UI, sans-serif;
+         background: #1d2026; color: #e6e6e6; }
+  header { padding: 14px 18px; background: #151821; border-bottom: 1px solid #2c313d; }
+  h1 { margin: 0 0 4px; font-size: 17px; }
+  .sub { color: #9aa3b2; font-size: 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+         margin-top: 10px; }
+  button, .filebtn { background: #2f6df0; color: #fff; border: 0; border-radius: 6px;
+           padding: 7px 12px; font-size: 13px; cursor: pointer; }
+  button.ghost { background: #2c313d; }
+  button.sm { padding: 4px 9px; font-size: 12px; background: #2c313d; }
+  button:disabled { opacity: .45; cursor: default; }
+  .filebtn { display: inline-block; }
+  input[type=file] { display: none; }
+  input[type=search], input[type=text] { background: #11141b; border: 1px solid #2c313d;
+           color: #e6e6e6; border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+  main { padding: 0 18px 60px; }
+  /* groups are assigned to fixed columns by JS to balance total command count */
+  #content { display: flex; gap: 26px; align-items: flex-start; padding-top: 6px; }
+  .col { flex: 0 1 320px; max-width: 320px; min-width: 0; }   /* fixed width; don't stretch to fill */
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #2c313d;
+          color: #aeb6c4; margin-left: 6px; }
+  .empty { color: #8c93a3; padding: 40px 0; text-align: center; }
+  .err { color: #ff8a8a; }
+  .hint { color: #9aa3b2; font-size: 12px; margin-top: 6px; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 12px; margin-right: 6px;
+          display: inline-block; }
+  .chip.ok { background: #163a1f; color: #84e09a; border: 1px solid #2a6b3c; }
+  .chip.need { background: #3a2316; color: #ffb47f; border: 1px solid #6b452a; }
+
+  /* sticky visualizer + toolbar */
+  #kbwrap { position: sticky; top: 0; z-index: 4; background: #1d2026;
+            border-bottom: 1px solid #2c313d; margin: 0 -18px 6px; padding: 12px 18px 10px; }
+  .kbtools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  .kbtools #search { min-width: 220px; }
+  .tg { font-size: 12px; color: #cdd3de; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .layout-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa3b2; }
+  .lt-lbl.lt-active { color: #fff; font-weight: 600; }
+  .switch { position: relative; display: inline-block; width: 42px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider { position: absolute; inset: 0; background: #3a4150; border-radius: 22px; cursor: pointer; transition: .15s; }
+  .switch .slider:before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #cdd3de; border-radius: 50%; transition: .15s; }
+  .switch input:checked + .slider { background: #2f6df0; }
+  .switch input:checked + .slider:before { transform: translateX(20px); background: #fff; }
+  #kbbanner { font-size: 12px; color: #ffcf87; }
+  #kbbanner b { color: #fff; }
+  #kbbanner button { padding: 2px 8px; font-size: 11px; background: #4a3a1a; margin-left: 8px; }
+  #kbbanner.active { border: 1px solid #f0a132; background: #2a2418; padding: 3px 10px; border-radius: 6px; }
+  #search.has-text { border-color: #f0a132; }
+  .listtools { display: flex; gap: 8px; margin-top: 10px; }
+  .kb { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+  .kbsec { display: flex; flex-direction: column; gap: 4px; }
+  .kbrow { display: flex; gap: 4px; }
+  .kbkey { height: 34px; min-width: 34px; border: 1px solid #3a4150; border-radius: 5px;
+           background: #11141b; color: #cdd3de; font-size: 11px; display: flex;
+           align-items: center; justify-content: center; cursor: pointer; position: relative;
+           user-select: none; padding: 0 3px; white-space: nowrap; }
+  .kbkey:hover { border-color: #6ea0ff; }
+  .kbkey.kbblank { visibility: hidden; }
+  /* fill shade scales with how many commands use the key (--shade set in JS) */
+  .kbkey.has { background: rgba(74,124,214, var(--shade,.4)); border-color: #3a5a86; color: #e3ecff; }
+  .kbkey.hl-mod { background: rgba(58,150,150,.85); border-color: #3a7d7d; color: #eafdfd; }
+  .kbkey.hl { background: #2f6df0; border-color: #6ea0ff; color: #fff;
+              box-shadow: 0 0 0 2px rgba(47,109,240,.45); }
+  /* hover preview uses a lighter shade; declared after .hl so it shows on shared keys */
+  .kbkey.hl-modh { background: rgba(96,200,200,.6); border-color: #5fc0c0; color: #effdfd; }
+  .kbkey.hlh { background: #6f9bf0; border-color: #aeccff; color: #fff; }
+  .kbkey.sel { outline: 2px solid #f0a132; outline-offset: 1px; z-index: 1; }
+  .kbkey.conflict { box-shadow: 0 0 0 2px #ff5d5d; z-index: 1; }
+  .kbkey.clash { box-shadow: 0 0 0 2px #f0b53a; z-index: 1; }
+  .kbnote { color: #9aa3b2; font-size: 12px; margin-top: 8px; }
+  .kbnote b { color: #cfe0ff; }
+  /* mouse visual (codes 251-255) */
+  .mousewrap { align-items: center; }
+  .mousecap { font-size: 11px; color: #8c93a3; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .mouse { position: relative; width: 92px; height: 140px; }
+  .mbody { position: absolute; inset: 0; background: #0e1117; border: 1px solid #3a4150; border-radius: 46px 46px 22px 22px; }
+  .mface { position: absolute; top: 6px; width: 32px; height: 46px; border: 1px solid #3a4150; background: #11141b;
+           z-index: 1; display: flex; align-items: flex-start; justify-content: center; color: #5d6675;
+           font-size: 10px; padding-top: 4px; }
+  .mface.ml { left: 6px; border-radius: 30px 4px 0 0; }
+  .mface.mr { right: 6px; border-radius: 4px 30px 0 0; }
+  .kbkey.mbtn { position: absolute; z-index: 2; min-width: 0; height: auto; padding: 0; font-size: 10px; }
+  .mbtn.m-wu { left: 38px; top: 7px; width: 16px; height: 15px; border-radius: 7px 7px 0 0; }
+  .mbtn.m-mid { left: 38px; top: 22px; width: 16px; height: 16px; border-radius: 0; }
+  .mbtn.m-wd { left: 38px; top: 38px; width: 16px; height: 15px; border-radius: 0 0 7px 7px; }
+  .mbtn.m-x2 { left: -4px; top: 30px; width: 12px; height: 18px; border-radius: 6px 0 0 6px; }
+  .mbtn.m-x1 { left: -4px; top: 50px; width: 12px; height: 18px; border-radius: 6px 0 0 6px; }
+
+  /* grouped, multi-column command list */
+  .grp { margin: 0 0 16px; }
+  .grp h2 { display: flex; align-items: stretch; gap: 0; min-height: 26px; font-size: 13px;
+            text-transform: uppercase; letter-spacing: .04em; color: #8c93a3;
+            border-bottom: 1px solid #2c313d; padding-bottom: 5px; margin: 0 0 6px; }
+  .caret { display: flex; align-items: center; justify-content: center; width: 32px;
+           cursor: pointer; color: #8c93a3; border-radius: 4px; user-select: none; }
+  .caret:hover { background: #2c313d; color: #cfe0ff; }
+  .gname { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; padding: 0 8px;
+           cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .gname:hover { color: #cfe0ff; }
+  .gname.selgroup { background: #23314f; color: #cfe0ff; border-radius: 4px; }
+  .grp h2 .pill { align-self: center; }
+  .grp.collapsed .cmdgrid { display: none; }
+  .cmdgrid { display: block; }   /* commands stack vertically within their group */
+  .cmd { display: flex; align-items: center; gap: 8px; padding: 3px 6px;
+         border-bottom: 1px solid #23272f; min-width: 0; }
+  .cmd .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+             white-space: nowrap; cursor: pointer; }
+  .cmd .nm:hover { color: #9bc1ff; }
+  .cmd.selcmd { background: #23314f; border-radius: 4px; }
+  .cmd.sev-confirmed { background: rgba(255,93,93,.09); }
+  .cmd.sev-possible { background: rgba(240,181,58,.08); }
+  .cmd .warn { cursor: help; flex: 0 0 auto; font-size: 12px; }
+  .cmd .warn.sev-confirmed { color: #ff7676; }
+  .cmd .warn.sev-possible { color: #f0b53a; }
+  .cmd .warn.sev-override { color: #6ea0ff; }
+  #conflictbadge { font-size: 12px; cursor: pointer; padding: 3px 9px; border-radius: 6px; user-select: none; }
+  #conflictbadge.has { background: #2a1a1a; color: #ff9a9a; border: 1px solid #5a2a2a; }
+  #conflictbadge.none { color: #84e09a; }
+  #conflictbadge.on { outline: 2px solid #ff7676; outline-offset: 1px; }
+  #conflictbadge .sp { color: #f0b53a; }
+  #conflictbadge .so { color: #6ea0ff; }
+  .keybtn { background: #11141b; border: 1px solid #3a4150; color: #e6e6e6;
+            border-radius: 5px; padding: 4px 9px; min-width: 92px; flex: 0 0 auto;
+            font: inherit; cursor: pointer; text-align: left; }
+  .keybtn:hover { border-color: #2f6df0; }
+  .keybtn.capturing { border-color: #f0a132; background: #2a2418; color: #ffcf87; }
+  .keybtn.unbound { color: #6b7280; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <h1>AoE2:DE Hotkey Editor</h1>
+  <div class="sub">Supports the new wrapped <code>.hkp</code> format (build 155976+) that hotkeyeditor.com rejects.</div>
+  <div class="bar">
+    <label class="filebtn">Load .hkp files
+      <input type="file" id="files" accept=".hkp" multiple>
+    </label>
+    <span class="layout-toggle" title="Convert keybinds and relabel the keyboard; set this to match the layout of the file you load">
+      <span class="lt-lbl lt-active" id="ltQ">QWERTY</span>
+      <label class="switch"><input type="checkbox" id="layoutToggle"><span class="slider"></span></label>
+      <span class="lt-lbl" id="ltD">Dvorak</span>
+    </span>
+    <input type="text" id="pname" placeholder="profile name" style="display:none">
+    <button id="save" disabled>Download profile</button>
+  </div>
+  <div class="bar" id="fstatus" style="margin-top:8px"></div>
+  <div class="hint" id="hint"></div>
+</header>
+<main>
+  <div id="kbwrap" style="display:none">
+    <div class="kbtools">
+      <input type="search" id="search" placeholder="filter hotkeys…">
+      <label class="tg"><input type="checkbox" id="shadeToggle" checked> shade keys by # bound</label>
+      <label class="tg" id="chronWrap" style="display:none"><input type="checkbox" id="chronToggle"> show Chronicles</label>
+      <span id="conflictbadge" style="display:none"></span>
+      <span id="kbbanner"></span>
+    </div>
+    <div class="kb" id="kb"></div>
+    <div class="kbnote">Hover a <b>command</b> to preview &middot; click a <b>command</b> to pin its key &middot; click a <b>key</b> to list its commands &middot; click a <b>group name</b> to highlight the group &middot; <b>&#9662;</b> collapses &middot; while rebinding, click a key (incl. <b>mouse</b>) to assign it.</div>
+    <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button></div>
+  </div>
+  <div class="empty" id="placeholder">
+    Load both files of a profile:<br>
+    <code>&lt;Name&gt;.hkp</code> and that profile's <code>Base.hkp</code>
+    (from <code>…/profile/&lt;Name&gt;/Base.hkp</code>).
+  </div>
+  <div id="content"></div>
+</main>
+
+<!-- Inlined data: `python3 hotkey_editor.py --build` replaces the null below with the
+     {strings, civ, card} object. Left null in source so the page falls back to fetching
+     the json files when served from a local web server (dev mode); see loadData(). -->
+<script>window.HKP_DATA = null; /* __HKP_DATA__ */</script>
+<script>
+// ===== .hkp parser: ported from hkp_parser.py, verified byte-exact vs Python =====
+// (inflate/deflate via native deflate-raw streams; struct via DataView; STORE zip)
+const hkp = (() => {
+const enc = s => Uint8Array.from(s, c => c.charCodeAt(0));
+
+const GROUP_HEADER_MAGIC = 0x00100a60;
+const S = {
+  BASE_BEGIN: enc('baseHotkeysBegin'),
+  BASE_END: enc('baseHotkeysEnd'),
+  SHARED_BEGIN: enc('sharedHotkeyGroupsBegin'),
+  SHARED_END: enc('sharedHotkeyGroupsEnd'),
+  HANDLER_BEGIN: enc('HandlerBaseGroupBegin'),
+  HANDLER_END: enc('HandlerBaseGroupEnd'),
+  GUARD: enc('GroupHeaderGuard'),
+  ADD_BEGIN: enc('additionalHotkeysBegin'),
+  ADD_END: enc('additionalHotkeysEnd'),
+  DET_BEGIN: enc('detachedHotkeyGroupsBegin'),
+  DET_END: enc('detachedHotkeyGroupsEnd'),
+  DG_BEGIN: enc('detachedHotkeysGroupBegin'),
+  DG_END: enc('detachedHotkeysGroupEnd'),
+};
+const SECTIONS = [
+  [enc('allUnitCommandHotkeysBegin'), enc('allUnitCommandHotkeysEnd')],
+  [enc('allGameCommandHotkeysBegin'), enc('allGameCommandHotkeysEnd')],
+  [enc('allCycleCommandHotkeysBegin'), enc('allCycleCommandHotkeysEnd')],
+];
+
+class ParseError extends Error {}
+
+class Reader {
+  constructor(data) {
+    this.data = data;
+    this.dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    this.pos = 0;
+  }
+  u32() { const v = this.dv.getUint32(this.pos, true); this.pos += 4; return v >>> 0; }
+  f32() { const v = this.dv.getFloat32(this.pos, true); this.pos += 4; return v; }
+  peek(lit) {
+    if (this.pos + lit.length > this.data.length) return false;
+    for (let i = 0; i < lit.length; i++) if (this.data[this.pos + i] !== lit[i]) return false;
+    return true;
+  }
+  lit(l) {
+    if (!this.peek(l)) throw new ParseError('expected ' + String.fromCharCode(...l) + ' at offset ' + this.pos);
+    this.pos += l.length;
+  }
+  entry() {
+    const code = this.dv.getUint32(this.pos, true);
+    const sid = this.dv.getInt32(this.pos + 4, true);
+    const ctrl = this.data[this.pos + 8], alt = this.data[this.pos + 9],
+          shift = this.data[this.pos + 10], pad = this.data[this.pos + 11];
+    this.pos += 12;
+    return { code: code >>> 0, id: sid, ctrl, alt, shift, pad };
+  }
+  wrapped_entry() {
+    this.lit(S.HANDLER_BEGIN);
+    if (this.u32() !== GROUP_HEADER_MAGIC) throw new ParseError('bad group header magic at ' + (this.pos - 4));
+    this.lit(S.GUARD);
+    const e = this.entry();
+    this.lit(S.HANDLER_END);
+    return e;
+  }
+  menu(wrapped) {
+    const count = this.u32();
+    if (count > 100000) throw new ParseError('implausible count ' + count + ' at ' + (this.pos - 4));
+    const out = [];
+    for (let i = 0; i < count; i++) out.push(wrapped ? this.wrapped_entry() : this.entry());
+    return out;
+  }
+  eof() { return this.pos === this.data.length; }
+}
+
+function parse_shared(r, wrapped) {
+  const num = r.u32();
+  if (wrapped) { r.lit(S.BASE_BEGIN); r.lit(S.SHARED_BEGIN); }
+  const menus = [];
+  for (let i = 0; i < num; i++) menus.push(r.menu(wrapped));
+  let empty = 0;
+  if (wrapped) {
+    while (!r.peek(S.SHARED_END)) { if (r.u32() !== 0) throw new ParseError('expected empty menu slot at ' + (r.pos - 4)); empty++; }
+    r.lit(S.SHARED_END); r.lit(S.BASE_END);
+  } else {
+    while (!r.eof()) { if (r.u32() !== 0) throw new ParseError('expected empty menu slot at ' + (r.pos - 4)); empty++; }
+  }
+  return { kind: 'shared', menus, empty_slots: empty };
+}
+
+function parse_base(r, wrapped) {
+  const sections = [];
+  if (wrapped) {
+    r.lit(S.ADD_BEGIN);
+    for (const [b, e] of SECTIONS) { r.lit(b); sections.push(r.menu(true)); r.lit(e); }
+    r.lit(S.DET_BEGIN);
+  } else {
+    for (let i = 0; i < SECTIONS.length; i++) sections.push(r.menu(false));
+  }
+  const num = r.u32();
+  const groups = [];
+  for (let i = 0; i < num; i++) {
+    if (wrapped) {
+      const count = r.u32();
+      r.lit(S.DG_BEGIN);
+      const g = [];
+      for (let j = 0; j < count; j++) g.push(r.wrapped_entry());
+      r.lit(S.DG_END);
+      groups.push(g);
+    } else {
+      groups.push(r.menu(false));
+    }
+  }
+  if (wrapped) { r.lit(S.DET_END); r.lit(S.ADD_END); }
+  return {
+    kind: 'base',
+    unit_commands: sections[0], game_commands: sections[1], cycle_commands: sections[2],
+    detached_groups: groups,
+  };
+}
+
+function parse(data) {
+  let r = new Reader(data);
+  const version = r.f32();
+  let info;
+  if (r.peek(S.ADD_BEGIN)) {
+    info = parse_base(r, true);
+  } else if (data.length >= 8 + S.BASE_BEGIN.length &&
+             (() => { for (let i = 0; i < S.BASE_BEGIN.length; i++) if (data[8 + i] !== S.BASE_BEGIN[i]) return false; return true; })()) {
+    info = parse_shared(r, true);
+  } else {
+    info = null;
+    for (const fn of [parse_shared, parse_base]) {
+      r = new Reader(data); r.f32();
+      try { info = fn(r, false); break; }
+      catch (e) { if (e instanceof ParseError || e instanceof RangeError) info = null; else throw e; }
+    }
+    if (info === null) throw new ParseError('unrecognized .hkp layout');
+  }
+  if (!r.eof()) throw new ParseError('trailing data at offset ' + r.pos + ' of ' + r.data.length);
+  info.version = Math.round(version * 100) / 100;
+  info.wrapped = version >= 4.25;
+  return info;
+}
+
+// --- writing -----------------------------------------------------------
+function concat(arrs) {
+  let len = 0; for (const a of arrs) len += a.length;
+  const out = new Uint8Array(len);
+  let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+}
+function u32le(v) { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v >>> 0, true); return b; }
+function f32le(v) { const b = new Uint8Array(4); new DataView(b.buffer).setFloat32(0, v, true); return b; }
+function entryBytes(e) {
+  const b = new Uint8Array(12), dv = new DataView(b.buffer);
+  dv.setUint32(0, e.code >>> 0, true);
+  dv.setInt32(4, e.id | 0, true);
+  b[8] = e.ctrl & 255; b[9] = e.alt & 255; b[10] = e.shift & 255; b[11] = (e.pad || 0) & 255;
+  return b;
+}
+
+function unparse(info) {
+  const wrapped = info.wrapped;
+  const chunks = [f32le(info.version)];
+  const writeEntry = (e, w) => {
+    if (w) chunks.push(S.HANDLER_BEGIN, u32le(GROUP_HEADER_MAGIC), S.GUARD, entryBytes(e), S.HANDLER_END);
+    else chunks.push(entryBytes(e));
+  };
+  const writeMenu = (menu, w) => { chunks.push(u32le(menu.length)); for (const e of menu) writeEntry(e, w); };
+
+  if (info.kind === 'shared') {
+    chunks.push(u32le(info.menus.length));
+    if (wrapped) chunks.push(S.BASE_BEGIN, S.SHARED_BEGIN);
+    for (const m of info.menus) writeMenu(m, wrapped);
+    for (let i = 0; i < info.empty_slots; i++) chunks.push(u32le(0));
+    if (wrapped) chunks.push(S.SHARED_END, S.BASE_END);
+  } else {
+    const sections = [info.unit_commands, info.game_commands, info.cycle_commands];
+    if (wrapped) {
+      chunks.push(S.ADD_BEGIN);
+      for (let i = 0; i < SECTIONS.length; i++) { chunks.push(SECTIONS[i][0]); writeMenu(sections[i], true); chunks.push(SECTIONS[i][1]); }
+      chunks.push(S.DET_BEGIN, u32le(info.detached_groups.length));
+      for (const g of info.detached_groups) {
+        chunks.push(u32le(g.length), S.DG_BEGIN);
+        for (const e of g) writeEntry(e, true);
+        chunks.push(S.DG_END);
+      }
+      chunks.push(S.DET_END, S.ADD_END);
+    } else {
+      for (const m of sections) writeMenu(m, false);
+      chunks.push(u32le(info.detached_groups.length));
+      for (const g of info.detached_groups) writeMenu(g, false);
+    }
+  }
+  return concat(chunks);
+}
+
+// --- raw deflate (native browser/Node streams) -------------------------
+async function inflateRaw(u8) {
+  const ds = new DecompressionStream('deflate-raw');
+  const ab = await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+async function deflateRaw(u8) {
+  const cs = new CompressionStream('deflate-raw');
+  const ab = await new Response(new Blob([u8]).stream().pipeThrough(cs)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+
+// --- zip (STORE; .hkp payload is already deflate-compressed) ------------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function u16le(v) { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v, true); return b; }
+function zipStore(entries) {
+  const te = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const [nm, data] of entries) {
+    const name = te.encode(nm);
+    const crc = crc32(data);
+    const lh = concat([u32le(0x04034b50), u16le(20), u16le(0x0800), u16le(0), u16le(0), u16le(0),
+      u32le(crc), u32le(data.length), u32le(data.length), u16le(name.length), u16le(0), name]);
+    parts.push(lh, data);
+    central.push(concat([u32le(0x02014b50), u16le(20), u16le(20), u16le(0x0800), u16le(0), u16le(0), u16le(0),
+      u32le(crc), u32le(data.length), u32le(data.length), u16le(name.length), u16le(0), u16le(0), u16le(0), u16le(0),
+      u32le(0), u32le(offset), name]));
+    offset += lh.length + data.length;
+  }
+  const cdStart = offset;
+  let cdSize = 0;
+  for (const c of central) { parts.push(c); cdSize += c.length; }
+  parts.push(concat([u32le(0x06054b50), u16le(0), u16le(0), u16le(entries.length), u16le(entries.length),
+    u32le(cdSize), u32le(cdStart), u16le(0)]));
+  return concat(parts);
+}
+async function buildZipBytes(name, profile, base) {
+  name = (name || 'Hotkeys').trim() || 'Hotkeys';
+  const entries = [];
+  if (profile) entries.push([name + '.hkp', await deflateRaw(unparse(profile))]);
+  if (base) entries.push([name + '/Base.hkp', await deflateRaw(unparse(base))]);
+  return zipStore(entries);
+}
+
+async function buildZip(name, profile, base) {
+  return new Blob([await buildZipBytes(name, profile, base)], { type: 'application/zip' });
+}
+return { parse, unparse, inflateRaw, deflateRaw, buildZipBytes, buildZip, crc32, ParseError };
+})();
+// =================================================================================
+
+const state = { profile:null, base:null, name:'Hotkeys' };
+let strings = {};
+let capture = null;          // {rec, btn}
+let shadeByCount = true;     // request 5 toggle
+let layout = 'qwerty';       // 'qwerty' | 'dvorak' — drives keybind conversion + key labels
+let hideChronicles = true;   // Chronicles is a separate mode; hidden by default
+let hasChron = false;        // whether the loaded profile contains any Chronicles content
+let cardData = null;         // our own {cardById:{id:name}, chronicles:[ids]} mapping
+let chronIds = new Set();    // command ids known to be Chronicles content
+let hiddenIds = new Set();   // command ids always hidden (e.g. the redundant generic "Build")
+const collapsed = new Set(); // collapsed group names (request 3)
+function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
+
+// ---- virtual-key code -> label ----
+const VK = {8:'Backspace',9:'Tab',13:'Enter',19:'Pause',20:'CapsLock',27:'Esc',
+  32:'Space',33:'PageUp',34:'PageDown',35:'End',36:'Home',37:'←',38:'↑',
+  39:'→',40:'↓',44:'PrtSc',45:'Insert',46:'Delete',91:'LWin',92:'RWin',
+  93:'Menu',106:'Num*',107:'Num+',109:'Num-',110:'Num.',111:'Num/',144:'NumLock',
+  145:'ScrollLock',160:'LShift',161:'RShift',162:'LCtrl',163:'RCtrl',164:'LAlt',
+  165:'RAlt',186:';',187:'=',188:',',189:'-',190:'.',191:'/',192:'`',219:'[',
+  220:'\\',221:']',222:"'"};
+for (let i=48;i<=57;i++) VK[i]=String.fromCharCode(i);            // 0-9
+for (let i=65;i<=90;i++) VK[i]=String.fromCharCode(i);            // A-Z
+for (let i=96;i<=105;i++) VK[i]='Num'+(i-96);                     // Numpad 0-9
+for (let i=112;i<=135;i++) VK[i]='F'+(i-111);                     // F1-F24
+// AoE2 mouse inputs use codes 251-255
+VK[251]='Extra Btn 2'; VK[252]='Extra Btn 1'; VK[253]='Middle Btn';
+VK[254]='Wheel Down'; VK[255]='Wheel Up';
+const MODS = {16:1,17:1,18:1};
+const GECKO = {59:186, 61:187, 173:189};  // Firefox keyCodes for ; = - -> Windows VK
+
+function vkLabel(c){ if(!c) return ''; return VK[c] || ('VK'+c); }
+function comboLabel(e){
+  if(!e.code) return '(unbound)';
+  let s=''; if(e.ctrl)s+='Ctrl+'; if(e.alt)s+='Alt+'; if(e.shift)s+='Shift+';
+  return s + vkLabel(e.code);
+}
+function baseName(id){ return strings[id] || ('id '+id); }
+function recName(r){
+  let n=baseName(r.id);
+  if(r.occ>1) n+=' ('+r.occ+')';          // alternate binding of the same command
+  return n;
+}
+
+// ---- QWERTY <-> Dvorak vk map (mirror of dvorak_convert.py) ----
+const CHAR_TO_VK = {"'":0xDE,",":0xBC,".":0xBE,"/":0xBF,";":0xBA,"[":0xDB,"]":0xDD,
+  "-":0xBD,"=":0xBB,"\\":0xDC,"`":0xC0};
+for(const c of "abcdefghijklmnopqrstuvwxyz0123456789") CHAR_TO_VK[c]=c.toUpperCase().charCodeAt(0);
+const LAYOUT_CHANGES=[["-","["],["=","]"],["q","'"],["w",","],["e","."],["r","p"],
+ ["t","y"],["y","f"],["u","g"],["i","c"],["o","r"],["p","l"],["[","/"],["]","="],
+ ["s","o"],["d","e"],["f","u"],["g","i"],["h","d"],["j","h"],["k","t"],["l","n"],
+ [";","s"],["'","-"],["z",";"],["x","q"],["c","j"],["v","k"],["b","x"],["n","b"],
+ [",","w"],[".","v"],["/","z"]];
+function buildVkMap(reverse){
+  const m={};
+  for(const [q,d] of LAYOUT_CHANGES){
+    const src=reverse?d:q, dst=reverse?q:d;
+    m[CHAR_TO_VK[src]]=CHAR_TO_VK[dst];
+  }
+  return m;
+}
+const VK_TO_CHAR={}; for(const ch in CHAR_TO_VK) VK_TO_CHAR[CHAR_TO_VK[ch]]=ch;
+const Q2D={}; for(const [q,d] of LAYOUT_CHANGES) Q2D[q]=d;   // qwerty char -> dvorak char
+// What a physical key shows / reports under the current layout.  In Dvorak the
+// alpha/punctuation keys take their Dvorak char + vk; everything else is fixed.
+function keyDisplay(spec){
+  if(spec.vk===undefined) return {vk:undefined, label:spec.l};
+  if(layout==='dvorak'){
+    const ch=VK_TO_CHAR[spec.vk];
+    if(ch!==undefined && Q2D[ch]!==undefined){
+      const dch=Q2D[ch];
+      return {vk:CHAR_TO_VK[dch], label:(dch>='a'&&dch<='z')?dch.toUpperCase():dch};
+    }
+  }
+  return {vk:spec.vk, label:spec.l};
+}
+
+// ---- file menus ----
+function menusOf(info){
+  if(!info) return [];
+  if(info.kind==='shared') return info.menus.map((m,i)=>['Menu '+(i+1), m]);
+  const out=[['Unit commands',info.unit_commands],
+            ['Game commands',info.game_commands],
+            ['Cycle commands',info.cycle_commands]];
+  info.detached_groups.forEach((g,i)=>out.push(['Group '+(i+1), g]));
+  return out;
+}
+function forEachEntry(fn){
+  [state.base, state.profile].forEach(info=>
+    menusOf(info).forEach(([,menu])=>menu.forEach(fn)));
+}
+
+// ---- model ----
+// Every entry with id>0 is its own editable record (no dedup, no syncing) so
+// that alternate bindings -- the same id stored more than once, e.g. "Go to
+// Next Idle Villager (2)" -- each get their own row, exactly like the game UI.
+let allRecs=[];              // [{e, id, occ}]
+let recsById=new Map();      // id -> [rec]
+let recByKey=new Map();      // vk(number) | 'ctrl'|'alt'|'shift' -> [rec]
+let groupedView=[];          // [{name, recs:[rec]}]
+let keyEls={};               // 'k'+vk | 'm'+mod -> [keyboard DOM elements]
+let selectedKey=null;        // 'k'+vk | 'm'+mod currently filtering, or null
+let selectedGroup=null;      // group name whose heading is "selected" (keys highlighted), or null
+
+function buildEntries(){
+  const list=[]; const occ=new Map();
+  [['b',state.base],['p',state.profile]].forEach(([tag,info])=>{
+    menusOf(info).forEach(([label,menu])=>{
+      menu.forEach(e=>{
+        if(e.id<=0) return;
+        const n=(occ.get(e.id)||0)+1; occ.set(e.id,n);
+        list.push({e:e, id:e.id, occ:n, src:tag+'|'+label,
+                   chron: chronIds.has(e.id) || isChronName(strings[e.id]),
+                   hidden: hiddenIds.has(e.id)});
+      });
+    });
+  });
+  return list;
+}
+const MENU_NAMES={'p|Menu 1':'Misc','p|Menu 2':'Game & Chat','p|Menu 3':'Idle Units',
+  'p|Menu 4':'Control Groups','p|Menu 5':'Camera','p|Menu 6':'Replay','p|Menu 7':'Unit Stances',
+  'p|Menu 8':'Zoom','p|Menu 9':'Gates'};
+// built-in fallback grouping, read from the file's own structure (merges into the
+// matching curated group names where they exist, e.g. newer "Select all X" cmds)
+function structureGroupName(r){
+  const s=r.src;
+  if(s==='b|Game commands') return 'Select Commands';
+  if(s==='b|Cycle commands') return 'Go-To Commands';
+  if(s==='b|Unit commands') return 'Unit Commands';
+  if(MENU_NAMES[s]) return MENU_NAMES[s];
+  return 'Other Commands';
+}
+// the real building/command-card name (our curated card_data), falling back to
+// the file's built-in section/menu name for globals and unlabelled entries
+function groupNameOf(r){
+  const e=cardData && cardData.byId && cardData.byId[r.id];
+  return e ? e[0] : structureGroupName(r);
+}
+function buildModel(){
+  const full=buildEntries().filter(r=>!r.hidden);   // always drop hidden cmds (kept in state for saving)
+  hasChron=full.some(r=>r.chron);
+  allRecs = hideChronicles ? full.filter(r=>!r.chron) : full;   // chronicles entries also stay in state
+  const cw=document.getElementById('chronWrap'); if(cw) cw.style.display=hasChron?'':'none';
+  recsById=new Map();
+  allRecs.forEach(r=>{ if(!recsById.has(r.id)) recsById.set(r.id,[]); recsById.get(r.id).push(r); });
+  const byName=new Map(); const order=[];
+  const push=(name,r)=>{ if(!byName.has(name)){ byName.set(name,[]); order.push(name); } byName.get(name).push(r); };
+  // group every command by its real command card, or its file section for globals
+  allRecs.forEach(r=>push(groupNameOf(r), r));
+  groupedView=order.map(n=>({name:n, recs:byName.get(n)}));
+  indexKeys();
+  computeConflicts();
+}
+function indexKeys(){
+  recByKey=new Map();
+  const add=(k,r)=>{ if(!recByKey.has(k)) recByKey.set(k,[]); recByKey.get(k).push(r); };
+  allRecs.forEach(r=>{
+    const e=r.e;
+    if(e.code) add(e.code, r);
+    if(e.ctrl) add('ctrl', r);
+    if(e.alt)  add('alt', r);
+    if(e.shift) add('shift', r);
+  });
+}
+
+// ---- conflict detection (context-aware, civ-data-backed) ----
+// Context comes from the file's OWN structure (reliable), not the community group
+// list (incomplete for newer DLC commands):
+//   base Game/Cycle commands + profile global menus = always-active GLOBAL
+//   profile replay menu = REPLAY ; base Unit commands + stances = SELECTION
+//   each detached group / gate menu = a command card (contextual, overrides global)
+let CIV=null;                 // {idToCivs:{id:[civs]}, units:Set of unit ids}
+let conflictByRec=new Map();  // rec -> [{other, sev, civs?}]
+let conflictKeys=new Set();
+let recSev=new Map();         // rec -> highest severity
+let keySev=new Map();         // 'k'+vk -> highest non-override severity
+let showConflictsOnly=false;
+// Command slots that are mutually exclusive by civ — a civ fields at most one, so they
+// can never both be active even in the same card. Used only where the civ dataset can't
+// express it (a generic "Unique X" slot has no real unit name to look up). By command id
+// (stable per game version).  [[explicit-mutex-vs-civ-data]]
+const MUTEX_GROUPS=[
+  [19053,19358],          // generic Unique Warships  <->  Thirisadai (Bengalis')
+  [19136,19330,19354],    // Go to  Donjon / Krepost / Mule Cart   — civ-exclusive buildings
+  [19137,19019,19159],    // Select all  Donjons / Kreposts / Mule Carts  — same
+];
+const mutexOf=new Map();
+MUTEX_GROUPS.forEach((g,i)=>g.forEach(id=>mutexOf.set(id,i)));
+function sameMutex(a,b){ return mutexOf.has(a) && mutexOf.get(a)===mutexOf.get(b); }
+// Pairs that are technically co-bindable but practically a non-issue: shown as an
+// informational note (override tier — blue ⓘ, no key ring, not counted as a clash) with
+// a custom message, instead of a civ "possible" flag.  [[explicit-mutex-vs-civ-data]]
+const NOTE_PAIRS=[
+  { a:19125, b:19070,     // Infantry Unique Units  vs  Eagle Warrior / Fire Lancer
+    msg:'Only clashes if you somehow field both at once — e.g. teamed with Italians '
+       +'(Condottiero) or via a conversion. No civ has both normally, so it usually '
+       +'doesn’t matter.' },
+];
+const noteOf=new Map();
+NOTE_PAIRS.forEach(p=>noteOf.set(Math.min(p.a,p.b)+'|'+Math.max(p.a,p.b), p.msg));
+function noteFor(a,b){ return noteOf.get(Math.min(a,b)+'|'+Math.max(a,b)) || null; }
+// Civ availability is keyed by command id (the .hkp id), precomputed at regen time,
+// so the runtime needs no name matching.
+function civsForId(id){ return CIV ? (CIV.idToCivs[id]||null) : null; }
+function isUnitId(id){ return CIV ? CIV.units.has(id) : false; }
+// conflict context comes from card_data.byId[id][1] (G/R/U:type/B:tab/D:card/CAMP)
+function recContext(r){
+  const e=cardData && cardData.byId && cardData.byId[r.id];
+  return e ? e[1] : ('Z|'+r.src);     // unknown -> isolated (no conflicts)
+}
+function sevRank(s){ return s==='confirmed'?3:s==='possible'?2:s==='override'?1:0; }
+// Decide if two same-combo commands clash, given their contexts.  Different unit
+// types / build tabs / building cards are mutually exclusive (no clash); 'any'
+// overlaps everything in its layer; same building card -> civ-availability check.
+function uTypesOverlap(ta, tb){
+  if(ta===tb) return true;
+  if(ta==='any'||tb==='any') return true;        // 'any' = every unit type
+  if(ta==='nonsiege') return tb!=='siege';       // every type except siege (e.g. Garrison)
+  if(tb==='nonsiege') return ta!=='siege';
+  return false;                                  // two distinct unit types never coexist
+}
+function ctxClassify(ra, rb){
+  if(sameMutex(ra.id, rb.id)) return null;   // civ-exclusive alternative slots never clash
+  const note=noteFor(ra.id, rb.id);
+  if(note) return {sev:'override', note:note};   // edge-case caution, not a real conflict
+  const ca=recContext(ra), cb=recContext(rb);
+  if(ca==='G'&&cb==='G') return {sev:'confirmed'};
+  if(ca==='R'&&cb==='R') return {sev:'confirmed'};
+  if(ca==='R'||cb==='R') return null;
+  if(ca==='G'||cb==='G') return {sev:'override'};      // global shadowed by a card/selection
+  const la=ca[0], lb=cb[0];
+  if(la!==lb) return null;                              // different selection layers
+  const ta=ca.slice(2), tb=cb.slice(2);
+  if(la==='U') return uTypesOverlap(ta,tb) ? {sev:'confirmed'} : null;
+  if(la==='B'){                                               // villager build menu
+    if(ca!==cb) return null;                                  // eco vs mil tab — mutually exclusive
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // same tab -> civ check. Civ-exclusive
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);    // buildings (Feitoria/Settlement/Donjon/
+      if(!ov.length) return null;                             // Krepost/Mule Cart…) never coexist -> no
+      return {sev:'confirmed', civs:ov}; }                    // clash; Settlement replaces Mill/Lumber/Mining
+    return {sev:'confirmed'};                                 // can't civ-verify (universal/nav) -> flag
+  }
+  if(la==='T') return ca===cb ? {sev:'confirmed'} : null;     // garrisons/transports
+  if(la==='D'){
+    if(ta==='any'||tb==='any') return {sev:'confirmed'};      // a building-wide command
+    if(ta!==tb) return null;                                  // different building cards
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // same card -> civ check
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);
+      if(!ov.length) return null;                             // civ-exclusive -> not a clash
+      return (isUnitId(ra.id)&&isUnitId(rb.id)) ? {sev:'confirmed',civs:ov} : {sev:'possible',civs:ov}; }
+    return {sev:'possible'};                                  // same card, can't civ-verify -> flag for review
+  }
+  return null;
+}
+function computeConflicts(){
+  conflictByRec=new Map(); conflictKeys=new Set(); recSev=new Map(); keySev=new Map();
+  if(!CIV) return;
+  const byCombo=new Map();
+  allRecs.forEach(r=>{ const e=r.e; if(!e.code) return;
+    const key=e.code+'/'+(e.ctrl?1:0)+(e.alt?1:0)+(e.shift?1:0);
+    if(!byCombo.has(key)) byCombo.set(key,[]); byCombo.get(key).push(r); });
+  const add=(r,other,sev,civs,note)=>{
+    if(!conflictByRec.has(r)) conflictByRec.set(r,[]);
+    conflictByRec.get(r).push({other:other, sev:sev, civs:civs||null, note:note||null});
+    if(sevRank(sev)>sevRank(recSev.get(r))) recSev.set(r,sev);
+    if(sev!=='override'){ const k='k'+r.e.code; conflictKeys.add(k);
+      if(sevRank(sev)>sevRank(keySev.get(k))) keySev.set(k,sev); }
+  };
+  byCombo.forEach(recs=>{
+    if(recs.length<2) return;
+    for(let a=0;a<recs.length;a++) for(let b=a+1;b<recs.length;b++){
+      const ra=recs[a], rb=recs[b]; if(ra.id===rb.id) continue;
+      const res=ctxClassify(ra,rb);
+      if(res){ add(ra,rb,res.sev,res.civs,res.note); add(rb,ra,res.sev,res.civs,res.note); }
+    }
+  });
+}
+function conflictTip(r){
+  const lead={confirmed:'Conflict',possible:'Possible clash',override:'Caution: card overrides this global'};
+  return (conflictByRec.get(r)||[]).map(c=> c.note
+    ? ('Note: '+recName(c.other)+' — '+c.note)
+    : (lead[c.sev]+': '+recName(c.other)
+       +(c.civs?(' ('+c.civs.length+' civ'+(c.civs.length>1?'s':'')+')'):''))
+  ).join('\n');
+}
+function updateConflictBadge(){
+  const b=document.getElementById('conflictbadge');
+  if(!CIV){ b.style.display='none'; return; }
+  b.style.display='';
+  let c=0,p=0,o=0; recSev.forEach(s=>{ if(s==='confirmed')c++; else if(s==='possible')p++; else o++; });
+  b.className=((c+p+o)?'has':'none')+(showConflictsOnly?' on':'');
+  b.innerHTML=(c+p+o) ? ('⚠ '+c+' <span class="sp">⚐ '+p+'</span> <span class="so">ⓘ '+o+'</span>')
+                      : '✓ no conflicts';
+  b.title='Click to show only flagged commands';
+}
+
+// ---- on-screen keyboard ----
+const KB_MAIN=[
+ [{l:'Esc',vk:27},{gap:1},{l:'F1',vk:112},{l:'F2',vk:113},{l:'F3',vk:114},{l:'F4',vk:115},{gap:.5},{l:'F5',vk:116},{l:'F6',vk:117},{l:'F7',vk:118},{l:'F8',vk:119},{gap:.5},{l:'F9',vk:120},{l:'F10',vk:121},{l:'F11',vk:122},{l:'F12',vk:123}],
+ [{l:'`',vk:192},{l:'1',vk:49},{l:'2',vk:50},{l:'3',vk:51},{l:'4',vk:52},{l:'5',vk:53},{l:'6',vk:54},{l:'7',vk:55},{l:'8',vk:56},{l:'9',vk:57},{l:'0',vk:48},{l:'-',vk:189},{l:'=',vk:187},{l:'Back',vk:8,w:2}],
+ [{l:'Tab',vk:9,w:1.5},{l:'Q',vk:81},{l:'W',vk:87},{l:'E',vk:69},{l:'R',vk:82},{l:'T',vk:84},{l:'Y',vk:89},{l:'U',vk:85},{l:'I',vk:73},{l:'O',vk:79},{l:'P',vk:80},{l:'[',vk:219},{l:']',vk:221},{l:'\\',vk:220,w:1.5}],
+ [{l:'Caps',vk:20,w:1.75},{l:'A',vk:65},{l:'S',vk:83},{l:'D',vk:68},{l:'F',vk:70},{l:'G',vk:71},{l:'H',vk:72},{l:'J',vk:74},{l:'K',vk:75},{l:'L',vk:76},{l:';',vk:186},{l:"'",vk:222},{l:'Enter',vk:13,w:2.25}],
+ [{l:'Shift',mod:'shift',w:2.25},{l:'Z',vk:90},{l:'X',vk:88},{l:'C',vk:67},{l:'V',vk:86},{l:'B',vk:66},{l:'N',vk:78},{l:'M',vk:77},{l:',',vk:188},{l:'.',vk:190},{l:'/',vk:191},{l:'Shift',mod:'shift',w:2.75}],
+ [{l:'Ctrl',mod:'ctrl',w:1.4},{l:'Win',vk:91,w:1.2},{l:'Alt',mod:'alt',w:1.4},{l:'Space',vk:32,w:6},{l:'Alt',mod:'alt',w:1.4},{l:'Win',vk:92,w:1.2},{l:'Menu',vk:93,w:1.2},{l:'Ctrl',mod:'ctrl',w:1.4}],
+];
+const KB_NAV=[
+ [{l:'Ins',vk:45},{l:'Home',vk:36},{l:'PgUp',vk:33}],
+ [{l:'Del',vk:46},{l:'End',vk:35},{l:'PgDn',vk:34}],
+ [{blank:1},{l:'↑',vk:38},{blank:1}],
+ [{l:'←',vk:37},{l:'↓',vk:40},{l:'→',vk:39}],
+];
+const KB_NUM=[
+ [{l:'Num',vk:144},{l:'/',vk:111},{l:'*',vk:106},{l:'-',vk:109}],
+ [{l:'7',vk:103},{l:'8',vk:104},{l:'9',vk:105},{l:'+',vk:107}],
+ [{l:'4',vk:100},{l:'5',vk:101},{l:'6',vk:102},{blank:1}],
+ [{l:'1',vk:97},{l:'2',vk:98},{l:'3',vk:99},{l:'Ent',vk:13}],
+ [{l:'0',vk:96,w:2},{l:'.',vk:110},{blank:1}],
+];
+function makeKey(spec){
+  if(spec.gap){ const s=document.createElement('div'); s.style.width=(spec.gap*38)+'px'; return s; }
+  const el=document.createElement('div');
+  el.className='kbkey'+(spec.blank?' kbblank':'');
+  const w=spec.w||1; el.style.width=(w*34+(w-1)*4)+'px';
+  if(spec.blank) return el;
+  const disp=keyDisplay(spec);
+  el.innerHTML='<span class="lbl"></span>';
+  el.querySelector('.lbl').textContent=disp.label;
+  const id=(disp.vk!==undefined)?('k'+disp.vk):('m'+spec.mod);
+  (keyEls[id]=keyEls[id]||[]).push(el);
+  el.onclick=(ev)=>onKeyClick(id, ev);
+  return el;
+}
+// mouse visual: the 5 bindable mouse inputs (codes 251-255) plus L/R for shape.
+function makeMouse(){
+  const wrap=document.createElement('div'); wrap.className='kbsec mousewrap';
+  const cap=document.createElement('div'); cap.className='mousecap'; cap.textContent='Mouse';
+  const mouse=document.createElement('div'); mouse.className='mouse';
+  const body=document.createElement('div'); body.className='mbody';
+  const ml=document.createElement('div'); ml.className='mface ml'; ml.textContent='L';
+  const mr=document.createElement('div'); mr.className='mface mr'; mr.textContent='R';
+  mouse.append(body, ml, mr);
+  const mk=(vk,label,cls,title)=>{
+    const el=document.createElement('div'); el.className='kbkey mbtn '+cls;
+    el.innerHTML='<span class="lbl"></span>'; el.querySelector('.lbl').textContent=label; el.title=title;
+    const id='k'+vk; (keyEls[id]=keyEls[id]||[]).push(el);
+    el.onclick=(ev)=>onKeyClick(id, ev);
+    mouse.appendChild(el);
+  };
+  mk(255,'▲','m-wu','Wheel Up');
+  mk(253,'●','m-mid','Middle Button');
+  mk(254,'▼','m-wd','Wheel Down');
+  mk(251,'5','m-x2','Extra Button 2 (forward)');
+  mk(252,'4','m-x1','Extra Button 1 (back)');
+  wrap.append(cap, mouse);
+  return wrap;
+}
+function renderKeyboard(){
+  keyEls={};
+  const kb=document.getElementById('kb'); kb.innerHTML='';
+  [KB_MAIN,KB_NAV,KB_NUM].forEach(sec=>{
+    const secEl=document.createElement('div'); secEl.className='kbsec';
+    sec.forEach(row=>{
+      const r=document.createElement('div'); r.className='kbrow';
+      row.forEach(spec=>r.appendChild(makeKey(spec)));
+      secEl.appendChild(r);
+    });
+    kb.appendChild(secEl);
+  });
+  kb.appendChild(makeMouse());
+}
+function refreshKeyboard(){
+  document.querySelectorAll('.kbkey').forEach(el=>{ el.classList.remove('has'); el.style.removeProperty('--shade'); });
+  let maxn=1;
+  recByKey.forEach((recs,k)=>{ if(typeof k==='number' && recs.length>maxn) maxn=recs.length; });
+  recByKey.forEach((recs,k)=>{
+    const isMod=(typeof k!=='number');
+    const id=isMod?('m'+k):('k'+k);
+    let shade=.45;
+    if(shadeByCount){
+      shade = isMod ? .5 : (maxn<=1 ? .5 : (0.16 + 0.64*(recs.length-1)/(maxn-1)));
+    }
+    (keyEls[id]||[]).forEach(el=>{ el.classList.add('has'); el.style.setProperty('--shade', shade.toFixed(3)); });
+  });
+  document.querySelectorAll('.kbkey.conflict,.kbkey.clash').forEach(el=>el.classList.remove('conflict','clash'));
+  keySev.forEach((sev,id)=>{ const cls=(sev==='confirmed')?'conflict':'clash';
+    (keyEls[id]||[]).forEach(el=>el.classList.add(cls)); });
+  updateConflictBadge();
+}
+function keyLabel(id){ const e=(keyEls[id]||[])[0]; return e?e.querySelector('.lbl').textContent:id; }
+
+// ---- highlighting (keyboard <-> list) ----
+function clearHighlight(){   // purely visual; does not touch the selectedGroup state
+  document.querySelectorAll('.kbkey.hl,.kbkey.hl-mod').forEach(el=>el.classList.remove('hl','hl-mod'));
+  document.querySelectorAll('.cmd.selcmd').forEach(el=>el.classList.remove('selcmd'));
+  document.querySelectorAll('.gname.selgroup').forEach(el=>el.classList.remove('selgroup'));
+}
+// re-apply the selected group's key highlight + heading marker (after edits / re-renders)
+function applyGroupHighlight(){
+  if(!selectedGroup) return;
+  const g=groupedView.find(x=>x.name===selectedGroup);
+  if(!g){ selectedGroup=null; return; }          // group no longer exists (e.g. new file loaded)
+  g.recs.forEach(hlRec);
+  document.querySelectorAll('.gname').forEach(el=>{
+    if(el.dataset.group===selectedGroup) el.classList.add('selgroup'); });
+}
+function hlRec(r){
+  const e=r.e;
+  if(e.code) (keyEls['k'+e.code]||[]).forEach(el=>el.classList.add('hl'));
+  if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-mod'));
+  if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-mod'));
+  if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-mod'));
+}
+function hoverRec(r){      // request 6: lighter preview shade
+  const e=r.e;
+  if(e.code) (keyEls['k'+e.code]||[]).forEach(el=>el.classList.add('hlh'));
+  if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-modh'));
+  if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-modh'));
+  if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-modh'));
+}
+function clearHover(){
+  document.querySelectorAll('.kbkey.hlh,.kbkey.hl-modh').forEach(el=>el.classList.remove('hlh','hl-modh'));
+}
+function onCommandClick(r,item){ selectedGroup=null; clearHighlight(); hlRec(r); item.classList.add('selcmd'); }
+function onGroupClick(group, el){
+  if(selectedGroup===group.name){ selectedGroup=null; clearHighlight(); return; }  // click again -> clear
+  selectedGroup=group.name; clearHighlight(); group.recs.forEach(hlRec);
+  if(el) el.classList.add('selgroup');
+}
+function onKeyClick(id, ev){
+  // during a rebind capture, clicking a key assigns it (the only way to bind a
+  // mouse button, since mouse presses can't be captured via keydown)
+  if(capture){
+    const vk = id[0]==='k' ? parseInt(id.slice(1)) : 0;
+    if(vk){
+      applyBinding(capture.rec, vk, ev&&ev.ctrlKey?1:0, ev&&ev.altKey?1:0, ev&&ev.shiftKey?1:0);
+      capture.btn.classList.remove('capturing'); capture=null; afterEdit();
+    } else { cancelCapture(); }   // a bare modifier key can't be a binding
+    return;
+  }
+  if(selectedKey===id){ clearKeyFilter(); return; }
+  selectedKey=id;
+  selectedGroup=null;
+  document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel'));
+  (keyEls[id]||[]).forEach(el=>el.classList.add('sel'));
+  clearHighlight();
+  renderList();
+}
+function clearKeyFilter(){
+  selectedKey=null;
+  document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel'));
+  renderList();
+}
+function keyFilterSet(){
+  if(!selectedKey) return null;
+  const k=selectedKey[0]==='k'?parseInt(selectedKey.slice(1)):selectedKey.slice(1);
+  return new Set(recByKey.get(k)||[]);
+}
+function esc(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function updateBanner(){
+  const b=document.getElementById('kbbanner');
+  const ftext=document.getElementById('search').value.trim();
+  const parts=[];
+  if(selectedKey){ const kset=keyFilterSet(); parts.push('key <b>'+keyLabel(selectedKey)+'</b> ('+(kset?kset.size:0)+')'); }
+  if(ftext) parts.push('text <b>"'+esc(ftext)+'"</b>');
+  const active=parts.length>0;
+  b.classList.toggle('active', active);
+  if(!active){ b.textContent=''; return; }
+  b.innerHTML='Filtered by '+parts.join(' + ')+' ';
+  const x=document.createElement('button'); x.textContent='clear'; x.onclick=clearAllFilters;
+  b.appendChild(x);
+}
+function clearAllFilters(){
+  selectedKey=null;
+  const s=document.getElementById('search'); s.value=''; s.classList.remove('has-text');
+  document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel'));
+  renderList();
+}
+
+// ---- collapse (request 3) ----
+function toggleCollapse(name){ if(collapsed.has(name)) collapsed.delete(name); else collapsed.add(name); renderList(); }
+function collapseAll(){ groupedView.forEach(g=>collapsed.add(g.name)); renderList(); }
+function expandAll(){ collapsed.clear(); renderList(); }
+
+// ---- command list (multi-column, request 4) ----
+function makeCmd(r){
+  const e=r.e;
+  const item=document.createElement('div'); item.className='cmd';
+  item.onmouseenter=()=>hoverRec(r);   // hovering anywhere on the row previews its keys
+  item.onmouseleave=clearHover;
+  const nm=document.createElement('div'); nm.className='nm';
+  nm.textContent=recName(r); nm.title=recName(r)+'  (#'+r.id+')';
+  nm.onclick=()=>onCommandClick(r,item);
+  const btn=document.createElement('button');
+  btn.className='keybtn'+(e.code?'':' unbound');
+  btn.textContent=comboLabel(e);
+  btn.title='Left-click to rebind, then press any key. Right-click to unbind.';
+  btn.onclick=()=>{ if(capture && capture.btn===btn) cancelCapture(); else startCapture(r,btn); };
+  btn.oncontextmenu=(ev)=>{ ev.preventDefault(); unbind(r,btn); };
+  const sev=recSev.get(r);
+  if(sev){
+    item.classList.add('sev-'+sev);
+    const w=document.createElement('span'); w.className='warn sev-'+sev;
+    w.textContent = sev==='confirmed'?'⚠':(sev==='possible'?'⚐':'ⓘ');
+    w.title=conflictTip(r); item.appendChild(w);
+  }
+  item.append(nm,btn);
+  return item;
+}
+function columnCount(content){
+  const w=content.clientWidth || (window.innerWidth-36);
+  const COLW=320, GAP=26;
+  return Math.max(1, Math.floor((w+GAP)/(COLW+GAP)));
+}
+// contiguous, order-preserving split of weights into k columns that minimises
+// the heaviest column (classic linear-partition DP) -> roughly even columns.
+function balancedColumns(weights, k){
+  const m=weights.length;
+  if(k<=1 || m===0) return [[0,m]];
+  if(k>=m) return weights.map((_,i)=>[i,i+1]);
+  const pre=[0]; for(const w of weights) pre.push(pre[pre.length-1]+w);
+  const cost=Array.from({length:m+1},()=>new Array(k+1).fill(Infinity));
+  const div=Array.from({length:m+1},()=>new Array(k+1).fill(0));
+  for(let i=0;i<=m;i++) cost[i][1]=pre[i];
+  for(let j=2;j<=k;j++)
+    for(let i=1;i<=m;i++)
+      for(let p=1;p<=i;p++){
+        const c=Math.max(cost[p][j-1], pre[i]-pre[p]);
+        if(c<cost[i][j]){ cost[i][j]=c; div[i][j]=p; }
+      }
+  const bounds=[]; let i=m,j=k;
+  while(j>1){ const p=div[i][j]; bounds.unshift([p,i]); i=p; j--; }
+  bounds.unshift([0,i]);
+  return bounds;
+}
+function buildGroupEl(v, forceOpen){
+  const group=v.group, recs=v.recs;
+  const open=forceOpen || !collapsed.has(group.name);
+  const grp=document.createElement('div'); grp.className='grp'+(open?'':' collapsed');
+  const h=document.createElement('h2');
+  const caret=document.createElement('span'); caret.className='caret';
+  caret.innerHTML=open?'&#9662;':'&#9656;';   // ▾ / ▸
+  caret.title='Collapse / expand this group';
+  caret.onclick=(ev)=>{ ev.stopPropagation(); toggleCollapse(group.name); };
+  const gname=document.createElement('span');
+  gname.className='gname'+(selectedGroup===group.name?' selgroup':'');
+  gname.dataset.group=group.name;
+  gname.textContent=group.name; gname.title='Highlight this group’s keys (click again to clear)';
+  gname.onclick=()=>onGroupClick(group, gname);
+  const pill=document.createElement('span'); pill.className='pill'; pill.textContent=recs.length;
+  h.append(caret,gname,pill);
+  grp.appendChild(h);
+  if(open){
+    const grid=document.createElement('div'); grid.className='cmdgrid';
+    recs.forEach(r=>grid.appendChild(makeCmd(r)));
+    grp.appendChild(grid);
+  }
+  return grp;
+}
+function renderList(){   // wrapper: keep scroll position so edits don't jump to top
+  const y=window.scrollY;
+  _renderList();
+  window.scrollTo(0, y);
+}
+function _renderList(){
+  const content=document.getElementById('content'); content.innerHTML='';
+  updateBanner();
+  if(!state.base && !state.profile) return;
+  const filter=document.getElementById('search').value.trim().toLowerCase();
+  const kset=keyFilterSet();
+  const forceOpen=!!filter || !!selectedKey || showConflictsOnly;
+  const vis=[];
+  groupedView.forEach(group=>{
+    const recs=group.recs.filter(r=>
+      (!filter||recName(r).toLowerCase().includes(filter)) && (!kset||kset.has(r))
+      && (!showConflictsOnly || recSev.has(r)));
+    if(recs.length) vis.push({group:group, recs:recs});
+  });
+  vis.sort((a,b)=>a.group.name.localeCompare(b.group.name));   // alphabetical headings
+  if(!vis.length){ const d=document.createElement('div'); d.className='empty';
+    d.textContent=(selectedKey||filter||showConflictsOnly)?'No commands match the current filter.':'No hotkeys.';
+    content.appendChild(d); return; }
+  // Weight by each group's FULL command count (ignore collapse state) so the
+  // column assignment stays fixed: collapsing a group just shrinks it in place
+  // instead of repartitioning and shuffling other groups between columns.
+  const HEADER_W=2;
+  const weights=vis.map(v=>HEADER_W + v.recs.length);
+  const k=Math.min(columnCount(content), vis.length);
+  balancedColumns(weights, k).forEach(([s,e])=>{
+    const col=document.createElement('div'); col.className='col';
+    for(let i=s;i<e;i++) col.appendChild(buildGroupEl(vis[i], forceOpen));
+    content.appendChild(col);
+  });
+}
+let _resizeT=null;
+window.addEventListener('resize', ()=>{ clearTimeout(_resizeT);
+  _resizeT=setTimeout(()=>{ if(state.base||state.profile) renderList(); }, 120); });
+function afterEdit(){ indexKeys(); computeConflicts(); refreshKeyboard(); clearHighlight(); clearHover(); renderList(); applyGroupHighlight(); }
+
+// ---- rebind / unbind (each entry independent — no syncing) ----
+function startCapture(rec, btn){
+  cancelCapture();
+  capture={rec,btn};
+  btn.classList.add('capturing');
+  btn.textContent='press a key…';
+}
+function cancelCapture(){
+  if(capture){ capture.btn.classList.remove('capturing'); refreshBtn(capture.btn,capture.rec.e); capture=null; }
+}
+function refreshBtn(btn,e){
+  btn.textContent=comboLabel(e);
+  btn.classList.toggle('unbound', !e.code);
+}
+function applyBinding(rec, code, ctrl, alt, shift){
+  const e=rec.e; e.code=code; e.ctrl=ctrl; e.alt=alt; e.shift=shift;
+}
+function unbind(rec,btn){
+  if(capture) cancelCapture();
+  applyBinding(rec,0,0,0,0);
+  afterEdit();
+}
+// while capturing, ANY key binds (Esc/Delete/etc. included) — only modifiers wait
+window.addEventListener('keydown', ev=>{
+  if(!capture) return;
+  ev.preventDefault();
+  const kc=GECKO[ev.keyCode]||ev.keyCode;  // normalise Firefox ;=- codes
+  if(MODS[kc]) return;                     // wait for a non-modifier key
+  applyBinding(capture.rec, kc, ev.ctrlKey?1:0, ev.altKey?1:0, ev.shiftKey?1:0);
+  capture.btn.classList.remove('capturing'); capture=null; afterEdit();
+}, true);
+// left-click off the rebind button / keyboard cancels an in-progress capture
+window.addEventListener('click', ev=>{
+  if(!capture) return;
+  const t=ev.target;
+  if(t.classList && t.classList.contains('keybtn')) return;   // the rebind button itself
+  if(t.closest && t.closest('.kbkey')) return;                // a key -> onKeyClick assigns it
+  cancelCapture();
+}, true);
+
+// ---- load ----
+async function onFiles(fileList){
+  const files=[...fileList];
+  if(!files.length) return;
+  setHint('parsing…');
+  try{
+    // merge — files may be loaded in separate picks (they live in different folders)
+    for(const f of files){
+      const info=hkp.parse(await hkp.inflateRaw(new Uint8Array(await f.arrayBuffer())));
+      const base=f.name.split(/[\\/]/).pop().replace(/\.[^.]*$/,'');
+      if(info.kind==='shared'){ state.profile=info;
+        if(base.toLowerCase()!=='base') state.name=base; }
+      else { state.base=info; }
+    }
+  }catch(e){ setHint('<span class="err">Could not parse: '+(e&&e.message||e)+'</span>'); return; }
+  if(state.name && state.name!=='Hotkeys') document.getElementById('pname').value=state.name;
+  document.getElementById('files').value='';   // allow re-picking the same file
+  // interpret the uploaded file as whatever layout the toggle is currently set to
+  // (don't force QWERTY) — set the toggle before loading a Dvorak profile.
+  buildModel();
+  showUI();
+  refreshKeyboard();
+  renderList();
+}
+function updateFileStatus(){
+  const profLabel = (state.name && state.name!=='Hotkeys') ? state.name+'.hkp'
+                                                           : 'top-level &lt;Name&gt;.hkp';
+  const prof = state.profile
+    ? '<span class="chip ok">✓ '+(state.name||'profile')+'.hkp</span>'
+    : '<span class="chip need">⬆ load '+profLabel+'</span>';
+  const base = state.base
+    ? '<span class="chip ok">✓ Base.hkp</span>'
+    : '<span class="chip need">⬆ load Base.hkp (in &lt;Name&gt;/ subfolder)</span>';
+  document.getElementById('fstatus').innerHTML = prof + base;
+}
+function showUI(){
+  document.getElementById('placeholder').style.display='none';
+  document.getElementById('kbwrap').style.display='';
+  document.getElementById('pname').style.display='';
+  document.getElementById('save').disabled=false;
+  updateFileStatus();
+  setHint('Loaded '+allRecs.length+' commands ('
+    +[state.base?'Base.hkp':null, state.profile?'profile.hkp':null].filter(Boolean).join(' + ')+').');
+}
+function setHint(html){ document.getElementById('hint').innerHTML=html; }
+
+// ---- layout toggle: convert keybinds AND relabel the keyboard ----
+// Both the binding codes and the key labels permute the same way, so the set of
+// highlighted *physical* keys is identical before and after toggling.
+function syncLayoutToggle(){
+  const cb=document.getElementById('layoutToggle'); if(cb) cb.checked=(layout==='dvorak');
+  const q=document.getElementById('ltQ'), d=document.getElementById('ltD');
+  if(q) q.classList.toggle('lt-active', layout==='qwerty');
+  if(d) d.classList.toggle('lt-active', layout==='dvorak');
+}
+function setLayout(target){
+  if(target===layout) return;
+  const m=buildVkMap(target==='qwerty');   // to QWERTY = reverse (Dvorak->QWERTY)
+  let n=0;
+  forEachEntry(e=>{ if(e.id>0 && m[e.code]!==undefined){ e.code=m[e.code]; n++; } });
+  layout=target;
+  selectedKey=null;
+  syncLayoutToggle();
+  renderKeyboard();   // relabel keys for the new layout
+  afterEdit();        // re-index by new codes, re-highlight, re-list
+  setHint('Switched to '+(target==='dvorak'?'Dvorak':'QWERTY')
+    +' — '+n+' keybinds converted and the keyboard relabelled.');
+}
+
+// ---- save ----
+async function save(){
+  state.name=document.getElementById('pname').value.trim()||'Hotkeys';
+  let blob;
+  try{ blob=await hkp.buildZip(state.name, state.profile, state.base); }
+  catch(e){ setHint('<span class="err">build failed: '+(e&&e.message||e)+'</span>'); return; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=state.name+'.zip';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  setHint('Downloaded '+state.name+'.zip — extract into your profile folder ('
+    +state.name+'.hkp at the root, '+state.name+'/Base.hkp in the subfolder).');
+}
+
+// ---- wire up ----
+document.getElementById('files').addEventListener('change', e=>onFiles(e.target.files));
+document.getElementById('search').addEventListener('input', e=>{
+  e.target.classList.toggle('has-text', !!e.target.value.trim());
+  if(selectedKey){ selectedKey=null;
+    document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel')); }
+  renderList();
+});
+document.getElementById('shadeToggle').addEventListener('change', e=>{
+  shadeByCount=e.target.checked; refreshKeyboard();
+});
+document.getElementById('chronToggle').addEventListener('change', e=>{
+  hideChronicles=!e.target.checked; buildModel(); refreshKeyboard(); renderList();
+});
+document.getElementById('collapseAll').addEventListener('click', collapseAll);
+document.getElementById('expandAll').addEventListener('click', expandAll);
+document.getElementById('save').addEventListener('click', save);
+document.getElementById('layoutToggle').addEventListener('change', e=>setLayout(e.target.checked?'dvorak':'qwerty'));
+document.getElementById('pname').addEventListener('input', e=>{ state.name=e.target.value; updateFileStatus(); });
+renderKeyboard();
+function applyData(d){
+  strings = d.strings || {};
+  CIV = { idToCivs:(d.civ&&d.civ.idToCivs)||{}, units:new Set((d.civ&&d.civ.units)||[]) };
+  cardData = d.card || null;
+  chronIds = new Set((d.card&&d.card.chronicles)||[]);
+  hiddenIds = new Set((d.card&&d.card.hidden)||[]);
+  if(state.base||state.profile){ buildModel(); computeConflicts(); refreshKeyboard(); renderList(); }
+  else updateConflictBadge();
+}
+function loadData(){
+  // Built index.html ships data inline; dev (page.html via a local server) fetches it.
+  if(window.HKP_DATA){ applyData(window.HKP_DATA); return; }
+  Promise.all([
+    fetch('strings.json').then(r=>r.json()),
+    fetch('civ_data.json').then(r=>r.json()),
+    fetch('card_data.json').then(r=>r.json())
+  ]).then(([s,c,cd])=>applyData({strings:s, civ:c, card:cd}))
+    .catch(()=>setHint('<span class="err">Could not load data files — serve the folder with a local web server, or use the built index.html.</span>'));
+}
+loadData();
+document.getElementById('conflictbadge').addEventListener('click', ()=>{
+  if(!recSev.size && !showConflictsOnly) return;
+  showConflictsOnly=!showConflictsOnly; updateConflictBadge(); renderList();
+});
+updateFileStatus();   // show "load X / load Y" from the start
+</script>
+</body>
+</html>

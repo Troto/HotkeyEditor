@@ -1,0 +1,73 @@
+# =============================================================================
+#  .gitignore — AOE2 Hotkey Editor
+#
+#  Tech stack: Python CLI/build tooling (hkp_parser.py, hotkey_editor.py,
+#  dvorak_convert.py) + a self-contained, zero-dependency static web app
+#  (page.html -> built index.html). Developed in a Dockerized Claude Code
+#  sandbox with JetBrains Rider on the host.
+# =============================================================================
+
+# --- Secrets — never commit --------------------------------------------------
+.env
+.env.local
+.env.*.local
+ClaudeDocker/.env
+
+# --- Python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+# Packaging / build output
+build/
+dist/
+*.egg-info/
+.eggs/
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+# Tooling caches
+.mypy_cache/
+.ruff_cache/
+.pytest_cache/
+.coverage
+htmlcov/
+
+# --- Node / web (only relevant if a JS toolchain is added later) -------------
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# NOTE: src/index.html is a GENERATED artifact (built from page.html via
+# `python3 hotkey_editor.py --build`) but is intentionally TRACKED so the site
+# can be hosted straight from the repo (e.g. GitHub Pages). Do NOT ignore it.
+
+# --- JetBrains IDEs (Rider / PyCharm / IntelliJ) -----------------------------
+# Share the .idea project config; ignore only the user-specific (personal)
+# files. Each .idea/ also carries its own Rider-generated .gitignore.
+.idea/**/workspace.xml
+.idea/**/tasks.xml
+.idea/**/usage.statistics.xml
+.idea/**/dictionaries
+.idea/**/shelf/
+.idea/**/contentModel.xml
+.idea/**/httpRequests/
+.idea/**/dataSources/
+.idea/**/dataSources.local.xml
+.idea/**/sqlDataSources.xml
+.idea/**/dynamic.xml
+.idea/**/uiDesigner.xml
+.idea/**/dbnavigator.xml
+# Module files are machine-specific
+.idea/**/modules.xml
+*.iml
+*.ipr
+
+# --- OS cruft ----------------------------------------------------------------
+.DS_Store
+Thumbs.db
+desktop.ini

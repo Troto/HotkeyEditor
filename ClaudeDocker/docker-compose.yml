@@ -1,0 +1,66 @@
+# Generic Claude Code sandbox. One container per project; the project name keys
+# the container/image/volume names so multiple projects never collide.
+# Set LOWERCASE_PROJECT_NAME in ClaudeDocker/.env.
+name: ${LOWERCASE_PROJECT_NAME:-claude-sandbox}
+
+services:
+  claude-code:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ${LOWERCASE_PROJECT_NAME:-claude-sandbox}:latest
+    container_name: ${LOWERCASE_PROJECT_NAME:-claude-sandbox}
+    hostname: claude-sandbox
+    working_dir: /workspace
+    stdin_open: true
+    tty: true
+    # The firewall installs iptables/ipset rules at startup; needs these caps.
+    cap_add:
+      - NET_ADMIN
+      - NET_RAW
+    # --- Dev server ports (managed by setup.sh) ------------------------------
+    # >>> setup.sh: ports (managed) >>>
+    ports:
+      - "8765:8765"
+    # <<< setup.sh: ports (managed) <<<
+    volumes:
+      # Your app code only — the `src/` folder mounts to /workspace, so Claude
+      # sees just your project, not this sandbox's own infra files. CLAUDE.md
+      # lives in src/. PROJECT_PATH is the project root (forward slashes on
+      # Windows, e.g. C:/Projects/MyApp); it falls back to the parent of
+      # ClaudeDocker/, so src/ is `../src`.
+      - ${PROJECT_PATH:-..}/src:/workspace:cached
+      # --- Optional: let Claude edit the sandbox infra -----------------------
+      # Off by default so Claude can't touch its own Dockerfile/firewall.
+      # Uncomment to expose ClaudeDocker/ at /workspace/_infra, then recreate the
+      # container. (Firewall/Dockerfile edits still need a rebuild to take effect.)
+      # - ${PROJECT_PATH:-..}/ClaudeDocker:/workspace/_infra
+      # --- Extra volume mounts (managed by setup.sh; e.g. node_modules) -------
+      # >>> setup.sh: volumes (managed) >>>
+      # <<< setup.sh: volumes (managed) <<<
+      # Claude Code config persists across rebuilds (login, MCP servers, etc).
+      - claude-config:/home/claude/.claude
+      # Shell history persists.
+      - claude-history:/home/claude/.history
+    environment:
+      - TERM=xterm-256color
+      # Optional: only for API-key auth. Leave blank to log in interactively.
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY:-}
+      - CLAUDE_CONFIG_DIR=/home/claude/.claude
+      # Claude is npm-installed as root, so it can't self-update as the claude
+      # user (and in-container updates are lost on rebuild anyway). Disable the
+      # auto-updater; update Claude by rebuilding the image instead.
+      - DISABLE_AUTOUPDATER=1
+    # Apply the firewall, then keep the container alive so an IDE (Rider/VS Code
+    # Dev Containers) or a terminal can attach. Launch Claude when you want with:
+    #   docker compose exec claude-code claude --dangerously-skip-permissions
+    # Drop "--dangerously-skip-permissions" to approve each action (the sandbox is
+    # what makes skipping safe). Prefer Claude to auto-start on `up`? Replace
+    # `exec sleep infinity` with `exec claude --dangerously-skip-permissions`.
+    command: bash -c "sudo /usr/local/bin/init-firewall.sh && exec sleep infinity"
+
+volumes:
+  # >>> setup.sh: volume-decls (managed) >>>
+  # <<< setup.sh: volume-decls (managed) <<<
+  claude-config:
+  claude-history:
