@@ -62,7 +62,7 @@
   #kbwrap { position: sticky; top: 0; z-index: 4; background: #1d2026;
             border-bottom: 1px solid #2c313d; margin: 0 -18px 6px; padding: 12px 18px 10px; }
   .kbtools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
-  .kbtools #search { min-width: 220px; }
+  #search { min-width: 220px; }
   .tg { font-size: 12px; color: #cdd3de; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
   .layout-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa3b2; }
   .lt-lbl.lt-active { color: #fff; font-weight: 600; }
@@ -81,7 +81,7 @@
   /* keyboard is pinned to the page centre (middle column, equal side gutters); the conflict
      panel fills the whole left gutter up to it, the right gutter mirrors it as empty space */
   .kbstage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
-             gap: 18px; align-items: start; }
+             gap: 64px; align-items: start; }
   .kb { grid-column: 2; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
   .kbsec { display: flex; flex-direction: column; gap: 4px; }
   .kbrow { display: flex; gap: 4px; }
@@ -106,8 +106,27 @@
                  box-shadow: 0 0 0 2px rgba(240,161,50,.5); z-index: 1; }
   .kbkey.conflict { box-shadow: 0 0 0 2px var(--sev-confirmed); z-index: 1; }
   .kbkey.clash { box-shadow: 0 0 0 2px var(--sev-possible); z-index: 1; }
-  .kbnote { color: #9aa3b2; font-size: 12px; margin-top: 8px; }
-  .kbnote b { color: #cfe0ff; }
+  /* interaction guide in the right gutter (grid col 3), mirroring the conflict panel on the left */
+  .khelp { grid-column: 3; min-width: 0; margin-left: 18px; font-size: 12px; color: #9aa3b2; }
+  .khelp h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
+  .khsec { margin-bottom: 14px; }
+  .khsec { display: flex; align-items: center; gap: 14px; }          /* visual on the left, bullets on the right */
+  /* every visual gets the same 240px slot so all bullet lists start at the same x */
+  .khsec .khvis { flex: 0 0 240px; display: flex; align-items: center; justify-content: center; }
+  .khbul { margin: 0; padding-left: 16px; flex: 1 1 auto; min-width: 0; }
+  .khbul li { margin: 3px 0; line-height: 1.35; }
+  .khbul b { color: #cfe0ff; }
+  .khnote { margin: 0; padding-top: 12px; border-top: 1px solid #2c313d; line-height: 1.4; }
+  .khnote b { color: #cfe0ff; }
+  /* sample visuals reuse the real component styles, but are non-interactive */
+  .khvis .kbkey { cursor: default; }
+  .khvis .kbkey:hover { border-color: #3a4150; }
+  /* group + command samples share one width so the two examples line up */
+  .khgrpdemo { width: 240px; display: flex; align-items: center; gap: 6px; padding-bottom: 4px;
+               border-bottom: 1px solid #2c313d; color: #8c93a3; text-transform: uppercase;
+               letter-spacing: .04em; font-size: 13px; }
+  .khgrpdemo .khgrp-r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .khvis .cmd { width: 240px; cursor: default; }
   /* conflict warnings panel (left of the keyboard) — cards laid out in up to 3 columns that
      share one scroll container (max-width caps the column count, the grid auto-fills) */
   .cpanel { grid-column: 1; min-width: 240px; max-height: 264px; overflow-y: auto; padding-right: 2px; }
@@ -120,6 +139,7 @@
   body.hide-conflicts .cmd .warn { display: none; }
   body.hide-conflicts .kbkey.conflict,
   body.hide-conflicts .kbkey.clash { box-shadow: none; }
+  body.hide-instructions .khelp { display: none; }   /* "show instructions" toggle (keyboard stays centred) */
   .cpanel h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
   .cpanel .csum { font-size: 12px; color: #aeb6c4; margin-bottom: 10px; }
   .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
@@ -241,19 +261,49 @@
 <main>
   <div id="kbwrap" style="display:none">
     <div class="kbtools">
-      <input type="search" id="search" placeholder="filter hotkeys…" autocomplete="off">
-      <label class="tg"><input type="checkbox" id="shadeToggle" checked autocomplete="off"> shade keys by # bound</label>
-      <label class="tg" id="chronWrap" style="display:none"><input type="checkbox" id="chronToggle" autocomplete="off"> show Chronicles</label>
+      <label class="tg" title="Shades each keyboard key darker the more commands are bound to it, so heavily-used keys stand out."><input type="checkbox" id="shadeToggle" checked autocomplete="off"> Shade keys by # bound</label>
+      <label class="tg" id="chronWrap" style="display:none" title="Show the hidden Chronicles (Battle for Greece) commands in the list. They're kept in saved files either way."><input type="checkbox" id="chronToggle" autocomplete="off"> Show Chronicles</label>
       <span id="conflictbadge" style="display:none"></span>
-      <label class="tg"><input type="checkbox" id="hideConflictsToggle" autocomplete="off"> hide conflicts</label>
+      <label class="tg" title="Hide the conflicts panel and all conflict highlighting (key rings + row markers). The toolbar conflict count stays."><input type="checkbox" id="hideConflictsToggle" autocomplete="off"> Hide conflicts</label>
+      <label class="tg" title="Show the interaction guide (the “How it works” panel to the right of the keyboard)."><input type="checkbox" id="showInstructionsToggle" checked autocomplete="off"> Show instructions</label>
       <span id="kbbanner"></span>
     </div>
     <div class="kbstage">
       <aside class="cpanel" id="conflictpanel"></aside>
       <div class="kb" id="kb"></div>
+      <aside class="khelp">
+        <h3>How it works</h3>
+        <div class="khsec khrow">
+          <div class="khvis"><div class="kbkey">Key</div></div>
+          <ul class="khbul">
+            <li><b>Hover</b> — highlights every command bound to it</li>
+            <li><b>Click</b> — filters the list to that key’s commands</li>
+          </ul>
+        </div>
+        <div class="khsec khrow">
+          <div class="khvis">
+            <div class="khgrpdemo"><span class="caret">&#9662;</span><span>Group</span><span class="khgrp-r"><span class="geye">👁</span><span class="pill">12</span></span></div>
+          </div>
+          <ul class="khbul">
+            <li><b>Click the name</b> — collapse / expand the group</li>
+            <li><b>Click the 👁</b> — highlight all the group’s keys</li>
+          </ul>
+        </div>
+        <div class="khsec khrow">
+          <div class="khvis">
+            <div class="cmd"><span class="nm">Command</span><button class="keybtn" tabindex="-1">Ctrl+A</button></div>
+          </div>
+          <ul class="khbul">
+            <li><b>Hover</b> — preview its key(s) on the keyboard</li>
+            <li><b>Click the name</b> — highlight the bound key</li>
+            <li><b>Click the hotkey</b> — press desired hotkey</li>
+            <li><b>Right click</b> — unbind hotkey</li>
+          </ul>
+        </div>
+        <p class="khnote"><b>Browser shortcuts:</b> keys like <b>Ctrl+N</b> are intercepted as a browser shortcut, so trying to enter it directly won't work. Instead, either tap <b>Ctrl/Shift</b> or click <b>Ctrl/Alt/Shift</b> to "arm" the modifier ready for a second input, then press the key.</p>
+      </aside>
     </div>
-    <div class="kbnote">Hover a <b>command</b> to preview &middot; click a <b>command</b> to pin its key &middot; click a <b>key</b> to list its commands &middot; click a <b>group name</b> to highlight the group &middot; <b>&#9662;</b> collapses &middot; while rebinding, click a key (incl. <b>mouse</b>) to assign it, or arm a modifier — click <b>Ctrl/Alt/Shift</b> (or press <b>Ctrl/Shift</b>) — for browser-reserved combos like <b>Ctrl+N</b>, then press the key.</div>
-    <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button></div>
+    <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button><input type="search" id="search" placeholder="filter commands…" autocomplete="off"></div>
   </div>
   <div class="empty" id="placeholder">
     Load both files of a profile:<br>
@@ -1409,6 +1459,9 @@ document.getElementById('hideConflictsToggle').addEventListener('change', e=>{
   // hides the panel + per-command conflict styling; the toolbar conflict badge stays
   document.body.classList.toggle('hide-conflicts', e.target.checked);
 });
+document.getElementById('showInstructionsToggle').addEventListener('change', e=>{
+  document.body.classList.toggle('hide-instructions', !e.target.checked);   // checked = shown
+});
 document.getElementById('collapseAll').addEventListener('click', collapseAll);
 document.getElementById('expandAll').addEventListener('click', expandAll);
 document.getElementById('save').addEventListener('click', save);
@@ -1424,6 +1477,7 @@ function syncTogglesToState(){
   set('shadeToggle', shadeByCount);        // default on
   set('chronToggle', !hideChronicles);     // default off (Chronicles hidden)
   set('hideConflictsToggle', document.body.classList.contains('hide-conflicts'));
+  set('showInstructionsToggle', !document.body.classList.contains('hide-instructions'));  // default on
   syncLayoutToggle();                      // matches the layout switch + labels to `layout`
 }
 syncTogglesToState();
