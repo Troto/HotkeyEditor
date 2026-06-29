@@ -1434,14 +1434,14 @@ function applyData(d){
   else updateConflictBadge();
 }
 function loadData(){
-  // Built index.html ships data inline; dev (page.html via a local server) fetches it.
+  // Built site/index.html ships data inline; dev (page.html via a local server) fetches it.
   if(window.HKP_DATA){ applyData(window.HKP_DATA); return; }
   Promise.all([
     fetch('strings.json').then(r=>r.json()),
     fetch('civ_data.json').then(r=>r.json()),
     fetch('card_data.json').then(r=>r.json())
   ]).then(([s,c,cd])=>applyData({strings:s, civ:c, card:cd}))
-    .catch(()=>setHint('<span class="err">Could not load data files — serve the folder with a local web server, or use the built index.html.</span>'));
+    .catch(()=>setHint('<span class="err">Could not load data files — serve the folder with a local web server, or use the built site/index.html.</span>'));
 }
 loadData();
 document.getElementById('conflictbadge').addEventListener('click', ()=>{

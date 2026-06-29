@@ -24,12 +24,12 @@ adds the things README doesn't: recent-session context, environment facts, and o
 - A profile = **two files**: `<Name>.hkp` (legacy shared menus) **and** `<Name>/Base.hkp`
   (remappable system). Both must be written; the download is a zip with that structure.
 - **Never write into the live game `profile/` folder.** Read freely.
-- Build: `python3 hotkey_editor.py --build` → `index.html` (the deployable single file). Preview
-  with `python3 -m http.server 8765`, then open `index.html`.
+- Build: `python3 hotkey_editor.py --build` → `site/index.html` (the deployable single file).
+  Preview with `python3 -m http.server 8765`, then open `site/index.html`.
 
 ## Architecture (current)
-- App = a single self-contained `index.html` (no server), built from `page.html` + the data by
-  `python3 hotkey_editor.py --build`. **`page.html` is the source**; `index.html` is generated and
+- App = a single self-contained `site/index.html` (no server), built from `page.html` + the data by
+  `python3 hotkey_editor.py --build`. **`page.html` is the source**; `site/index.html` is generated and
   hosts anywhere static (or opens offline). Conflict detection, all UI, **and `.hkp` parsing/
   writing** run in that page's JS — the parser is a JS port of `hkp_parser.py` (raw deflate via
   the browser's native `deflate-raw` streams).

@@ -1,15 +1,15 @@
 #!/usr/bin/python
 """AoE2:DE hotkey data + static-site build tool.
 
-The hotkey editor is a single self-contained web page (index.html) that does all
+The hotkey editor is a single self-contained web page (site/index.html) that does all
 .hkp parsing/writing in the browser — there is no server.  This script is the
 build toolchain for that page:
 
     python3 hotkey_editor.py --regen   # rebuild the 3 json data files from a game install
-    python3 hotkey_editor.py --build   # inline page.html + the json -> index.html (default)
+    python3 hotkey_editor.py --build   # inline page.html + the json -> site/index.html (default)
 
 The page's source is page.html; --build stamps the json data into it to produce the
-deployable index.html.  Binary .hkp logic still lives in hkp_parser.py for the CLI /
+deployable site/index.html.  Binary .hkp logic still lives in hkp_parser.py for the CLI /
 round-trip checks; the browser uses an equivalent JS port embedded in page.html.
 
 Stdlib only (works on Python 3.7).
@@ -25,7 +25,7 @@ _HERE = os.path.dirname(os.path.abspath(__file__))
 
 # --- vendored static data, all generated from a game install by `--regen` ------
 # These three files make the site fully self-contained: nothing is read from the
-# game install at runtime, and `--build` inlines them into index.html.  Rebuild
+# game install at runtime, and `--build` inlines them into site/index.html.  Rebuild
 # them after a game patch with `python3 hotkey_editor.py --regen`.
 #   strings.json  : {hotkey string id -> display name}  (trimmed from the game tables)
 #   card_data.json: {byId:{id:[group,ctx]}, chronicles, hidden}  (curation over hotkeys.json)
@@ -367,7 +367,7 @@ def regen():
 # --- build the single-file site ----------------------------------------
 
 def build():
-    """Assemble the self-contained index.html from page.html + the json data."""
+    """Assemble the self-contained site/index.html from page.html + the json data."""
     page_path = os.path.join(_HERE, 'page.html')
     if not os.path.isfile(page_path):
         print('ERROR: page.html not found next to this script.')
@@ -389,9 +389,11 @@ def build():
         print('ERROR: data marker not found in page.html.')
         return 1
     out = page.replace(marker, 'window.HKP_DATA = %s; /* __HKP_DATA__ */' % blob)
-    with open(os.path.join(_HERE, 'index.html'), 'w', encoding='utf-8') as f:
+    out_dir = os.path.join(_HERE, 'site')      # deployable lives in site/ (e.g. Cloudflare Pages output dir)
+    os.makedirs(out_dir, exist_ok=True)
+    with open(os.path.join(out_dir, 'index.html'), 'w', encoding='utf-8') as f:
         f.write(out)
-    print('wrote index.html (%d KB)' % (len(out.encode('utf-8')) // 1024))
+    print('wrote site/index.html (%d KB)' % (len(out.encode('utf-8')) // 1024))
     return 0
 
 
