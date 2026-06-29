@@ -5,8 +5,26 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>AoE2:DE Hotkey Editor &amp; Converter</title>
 <style>
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    /* semantic palette — single source of truth (rings, list markers, badge,
+       buttons and the conflict panel all read these) */
+    --blue-rgb: 47,109,240;
+    --blue:       rgb(var(--blue-rgb));   /* primary action / selection */
+    --blue-light: #6ea0ff;                /* lighter blue for hovers & borders */
+    --sev-confirmed-rgb: 255,93,93;
+    --sev-possible-rgb:  240,181,58;
+    --sev-confirmed: rgb(var(--sev-confirmed-rgb));
+    --sev-possible:  rgb(var(--sev-possible-rgb));
+    --sev-override:  var(--blue-light);   /* "global shadowed by a card" caution */
+    --key-sel: #3b82f6;   /* selected/filtered key (cobalt blue, away from the warm conflict hues) */
+    --accent:  #f0a132;   /* active text/key filter + rebind-in-progress accent */
+    --ok:      #84e09a;   /* success / "no conflicts" */
+  }
   * { box-sizing: border-box; }
+  /* always reserve the scrollbar gutter so filtering the list (which can remove the page
+     scrollbar) doesn't change the viewport width and shift the centre-pinned keyboard */
+  html { scrollbar-gutter: stable; }
   body { margin: 0; font: 14px/1.4 system-ui, Segoe UI, sans-serif;
          background: #1d2026; color: #e6e6e6; }
   header { padding: 14px 18px; background: #151821; border-bottom: 1px solid #2c313d; }
@@ -14,7 +32,7 @@
   .sub { color: #9aa3b2; font-size: 12px; }
   .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
          margin-top: 10px; }
-  button, .filebtn { background: #2f6df0; color: #fff; border: 0; border-radius: 6px;
+  button, .filebtn { background: var(--blue); color: #fff; border: 0; border-radius: 6px;
            padding: 7px 12px; font-size: 13px; cursor: pointer; }
   button.ghost { background: #2c313d; }
   button.sm { padding: 4px 9px; font-size: 12px; background: #2c313d; }
@@ -34,7 +52,7 @@
   .hint { color: #9aa3b2; font-size: 12px; margin-top: 6px; }
   .chip { font-size: 12px; padding: 3px 10px; border-radius: 12px; margin-right: 6px;
           display: inline-block; }
-  .chip.ok { background: #163a1f; color: #84e09a; border: 1px solid #2a6b3c; }
+  .chip.ok { background: #163a1f; color: var(--ok); border: 1px solid #2a6b3c; }
   .chip.need { background: #3a2316; color: #ffb47f; border: 1px solid #6b452a; }
 
   /* sticky visualizer + toolbar */
@@ -49,67 +67,125 @@
   .switch input { opacity: 0; width: 0; height: 0; }
   .switch .slider { position: absolute; inset: 0; background: #3a4150; border-radius: 22px; cursor: pointer; transition: .15s; }
   .switch .slider:before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #cdd3de; border-radius: 50%; transition: .15s; }
-  .switch input:checked + .slider { background: #2f6df0; }
+  .switch input:checked + .slider { background: var(--blue); }
   .switch input:checked + .slider:before { transform: translateX(20px); background: #fff; }
   #kbbanner { font-size: 12px; color: #ffcf87; }
   #kbbanner b { color: #fff; }
   #kbbanner button { padding: 2px 8px; font-size: 11px; background: #4a3a1a; margin-left: 8px; }
-  #kbbanner.active { border: 1px solid #f0a132; background: #2a2418; padding: 3px 10px; border-radius: 6px; }
-  #search.has-text { border-color: #f0a132; }
+  #kbbanner.active { border: 1px solid var(--accent); background: #2a2418; padding: 3px 10px; border-radius: 6px; }
+  #search.has-text { border-color: var(--accent); }
   .listtools { display: flex; gap: 8px; margin-top: 10px; }
-  .kb { display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+  /* keyboard is pinned to the page centre (middle column, equal side gutters); the conflict
+     panel fills the whole left gutter up to it, the right gutter mirrors it as empty space */
+  .kbstage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+             gap: 18px; align-items: start; }
+  .kb { grid-column: 2; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
   .kbsec { display: flex; flex-direction: column; gap: 4px; }
   .kbrow { display: flex; gap: 4px; }
   .kbkey { height: 34px; min-width: 34px; border: 1px solid #3a4150; border-radius: 5px;
            background: #11141b; color: #cdd3de; font-size: 11px; display: flex;
            align-items: center; justify-content: center; cursor: pointer; position: relative;
            user-select: none; padding: 0 3px; white-space: nowrap; }
-  .kbkey:hover { border-color: #6ea0ff; }
+  .kbkey:hover { border-color: var(--blue-light); }
   .kbkey.kbblank { visibility: hidden; }
   /* fill shade scales with how many commands use the key (--shade set in JS) */
   .kbkey.has { background: rgba(74,124,214, var(--shade,.4)); border-color: #3a5a86; color: #e3ecff; }
   .kbkey.hl-mod { background: rgba(58,150,150,.85); border-color: #3a7d7d; color: #eafdfd; }
-  .kbkey.hl { background: #2f6df0; border-color: #6ea0ff; color: #fff;
-              box-shadow: 0 0 0 2px rgba(47,109,240,.45); }
+  .kbkey.hl { background: var(--blue); border-color: var(--blue-light); color: #fff;
+              box-shadow: 0 0 0 2px rgba(var(--blue-rgb),.45); }
   /* hover preview uses a lighter shade; declared after .hl so it shows on shared keys */
   .kbkey.hl-modh { background: rgba(96,200,200,.6); border-color: #5fc0c0; color: #effdfd; }
   .kbkey.hlh { background: #6f9bf0; border-color: #aeccff; color: #fff; }
-  .kbkey.sel { outline: 2px solid #f0a132; outline-offset: 1px; z-index: 1; }
-  .kbkey.conflict { box-shadow: 0 0 0 2px #ff5d5d; z-index: 1; }
-  .kbkey.clash { box-shadow: 0 0 0 2px #f0b53a; z-index: 1; }
+  .kbkey.sel { outline: 2px solid var(--key-sel); outline-offset: 1px; z-index: 1; }
+  /* a modifier key clicked-armed during a rebind (so browser-reserved combos like Ctrl+N
+     can be assigned without physically holding the modifier) */
+  .kbkey.armed { background: #2a2418; border-color: var(--accent); color: #ffcf87;
+                 box-shadow: 0 0 0 2px rgba(240,161,50,.5); z-index: 1; }
+  .kbkey.conflict { box-shadow: 0 0 0 2px var(--sev-confirmed); z-index: 1; }
+  .kbkey.clash { box-shadow: 0 0 0 2px var(--sev-possible); z-index: 1; }
   .kbnote { color: #9aa3b2; font-size: 12px; margin-top: 8px; }
   .kbnote b { color: #cfe0ff; }
+  /* conflict warnings panel (left of the keyboard) — cards laid out in up to 3 columns that
+     share one scroll container (max-width caps the column count, the grid auto-fills) */
+  .cpanel { grid-column: 1; min-width: 240px; max-height: 264px; overflow-y: auto; padding-right: 2px; }
+  /* "hide conflicts" toggle: drop the panel (keyboard stays centred in col 2) and every
+     conflict cue — list row tints, the ⚠/⚐/ⓘ markers, and the keyboard key rings. Only the
+     toolbar badge is intentionally left intact. */
+  body.hide-conflicts .cpanel { display: none; }
+  body.hide-conflicts .cmd.sev-confirmed,
+  body.hide-conflicts .cmd.sev-possible { background: none; }
+  body.hide-conflicts .cmd .warn { display: none; }
+  body.hide-conflicts .kbkey.conflict,
+  body.hide-conflicts .kbkey.clash { box-shadow: none; }
+  .cpanel h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
+  .cpanel .csum { font-size: 12px; color: #aeb6c4; margin-bottom: 10px; }
+  .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+           gap: 8px; align-content: start; }
+  .cpanel .csum b { font-weight: 700; }
+  .cpanel .cok { display: flex; align-items: center; gap: 8px; color: var(--ok); font-size: 13px;
+                 background: rgba(132,224,154,.08); border: 1px solid #2a6b3c; border-radius: 8px; padding: 10px 12px; }
+  .cflt { border: 1px solid #2c313d; border-left-width: 4px; border-radius: 8px;
+          padding: 8px 10px; cursor: pointer; }
+  .cflt:hover { border-color: #4a5266; background: #20242d; }
+  .cflt.confirmed { border-left-color: var(--sev-confirmed); background: rgba(var(--sev-confirmed-rgb), .07); }
+  .cflt.possible  { border-left-color: var(--sev-possible);  background: rgba(var(--sev-possible-rgb), .06); }
+  .cflt .chead { display: flex; align-items: center; gap: 8px; }
+  .cflt .cico { font-size: 15px; line-height: 1; }
+  .cflt.confirmed .cico { color: var(--sev-confirmed); }
+  .cflt.possible  .cico { color: var(--sev-possible); }
+  .cflt .ckey { font-weight: 700; font-size: 14px; color: #fff; background: #11141b;
+                border: 1px solid #3a4150; border-radius: 5px; padding: 1px 8px; white-space: nowrap; }
+  .cflt .ctier { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+  .cflt.confirmed .ctier { color: var(--sev-confirmed); }
+  .cflt.possible  .ctier { color: var(--sev-possible); }
+  .cflt .cctx { font-size: 11px; color: #9aa3b2; margin: 6px 0 4px; }
+  .cflt .ccmd { font-size: 13px; color: #dfe5ee; padding: 1px 0 1px 14px; position: relative;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cflt .ccmd:before { content: '•'; position: absolute; left: 3px; color: #5d6675; }
+  .cflt .ccivs { font-size: 11px; color: #8c93a3; margin-top: 4px; }
   /* mouse visual (codes 251-255) */
   .mousewrap { align-items: center; }
   .mousecap { font-size: 11px; color: #8c93a3; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
-  .mouse { position: relative; width: 92px; height: 140px; }
-  .mbody { position: absolute; inset: 0; background: #0e1117; border: 1px solid #3a4150; border-radius: 46px 46px 22px 22px; }
-  .mface { position: absolute; top: 6px; width: 32px; height: 46px; border: 1px solid #3a4150; background: #11141b;
+  .mouse { position: relative; width: 96px; height: 146px; margin-left: 12px; }
+  .mbody { position: absolute; inset: 0; background: #0e1117; border: 1px solid #3a4150; border-radius: 48px 48px 22px 22px; }
+  .mface { position: absolute; top: 6px; width: 30px; height: 46px; border: 1px solid #3a4150; background: #11141b;
            z-index: 1; display: flex; align-items: flex-start; justify-content: center; color: #5d6675;
            font-size: 10px; padding-top: 4px; }
-  .mface.ml { left: 6px; border-radius: 30px 4px 0 0; }
-  .mface.mr { right: 6px; border-radius: 4px 30px 0 0; }
-  .kbkey.mbtn { position: absolute; z-index: 2; min-width: 0; height: auto; padding: 0; font-size: 10px; }
-  .mbtn.m-wu { left: 38px; top: 7px; width: 16px; height: 15px; border-radius: 7px 7px 0 0; }
-  .mbtn.m-mid { left: 38px; top: 22px; width: 16px; height: 16px; border-radius: 0; }
-  .mbtn.m-wd { left: 38px; top: 38px; width: 16px; height: 15px; border-radius: 0 0 7px 7px; }
-  .mbtn.m-x2 { left: -4px; top: 30px; width: 12px; height: 18px; border-radius: 6px 0 0 6px; }
-  .mbtn.m-x1 { left: -4px; top: 50px; width: 12px; height: 18px; border-radius: 6px 0 0 6px; }
+  .mface.ml { left: 6px; border-radius: 28px 4px 0 0; }
+  .mface.mr { right: 6px; border-radius: 4px 28px 0 0; }
+  .kbkey.mbtn { position: absolute; z-index: 2; min-width: 0; height: auto; padding: 0; font-size: 11px; }
+  .mbtn.m-wu { left: 36px; top: 6px; width: 24px; height: 19px; border-radius: 9px 9px 0 0; }
+  .mbtn.m-mid { left: 36px; top: 25px; width: 24px; height: 22px; border-radius: 0; }
+  .mbtn.m-wd { left: 36px; top: 47px; width: 24px; height: 19px; border-radius: 0 0 9px 9px; }
+  .mbtn.m-x2 { left: -10px; top: 28px; width: 20px; height: 26px; border-radius: 7px 0 0 7px; }
+  .mbtn.m-x1 { left: -10px; top: 56px; width: 20px; height: 26px; border-radius: 7px 0 0 7px; }
 
   /* grouped, multi-column command list */
   .grp { margin: 0 0 16px; }
-  .grp h2 { display: flex; align-items: stretch; gap: 0; min-height: 26px; font-size: 13px;
+  .grp h2 { display: flex; align-items: stretch; gap: 6px; font-size: 13px;
             text-transform: uppercase; letter-spacing: .04em; color: #8c93a3;
-            border-bottom: 1px solid #2c313d; padding-bottom: 5px; margin: 0 0 6px; }
+            border-bottom: 1px solid #2c313d; padding: 0; margin: 0 0 6px; }
+  /* both heading controls are bare buttons that inherit the h2's text styling and own the
+     full header height, so the band between dividers is entirely clickable button */
+  .gcollapse, .ghighlight { background: none; border: none; font: inherit; color: inherit;
+            text-transform: inherit; letter-spacing: inherit; cursor: pointer; border-radius: 4px;
+            display: flex; align-items: center; min-width: 0; min-height: 36px; }
+  /* collapse/expand button: caret + name, sized to its content */
+  .gcollapse { gap: 4px; padding: 0 6px 0 0; flex: 0 1 auto; min-width: 70%; }
+  .gcollapse:hover { background: #2c313d; color: #cfe0ff; }
   .caret { display: flex; align-items: center; justify-content: center; width: 32px;
-           cursor: pointer; color: #8c93a3; border-radius: 4px; user-select: none; }
-  .caret:hover { background: #2c313d; color: #cfe0ff; }
-  .gname { flex: 1 1 auto; min-width: 0; display: flex; align-items: center; padding: 0 8px;
-           cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .gname:hover { color: #cfe0ff; }
-  .gname.selgroup { background: #23314f; color: #cfe0ff; border-radius: 4px; }
-  .grp h2 .pill { align-self: center; }
+           flex: 0 0 auto; color: #8c93a3; user-select: none; }
+  .gname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* highlight button: takes the rest of the row, eye icon + count pushed to the right */
+  .ghighlight { flex: 1 1 auto; justify-content: flex-end; gap: 6px; padding: 0 8px; }
+  .ghighlight:hover { background: #2c313d; color: #cfe0ff; }
+  .ghighlight.selgroup { background: #23314f; color: #cfe0ff; }
+  .geye { font-size: 20px; line-height: 1; opacity: .8; }
+  .grp h2 .pill { margin-left: 0; }
   .grp.collapsed .cmdgrid { display: none; }
+  /* collapsed: no grid below, so drop the header's bottom margin and tighten the group gap */
+  .grp.collapsed { margin-bottom: 6px; }
+  .grp.collapsed h2 { margin-bottom: 0; }
   .cmdgrid { display: block; }   /* commands stack vertically within their group */
   .cmd { display: flex; align-items: center; gap: 8px; padding: 3px 6px;
          border-bottom: 1px solid #23272f; min-width: 0; }
@@ -117,23 +193,25 @@
              white-space: nowrap; cursor: pointer; }
   .cmd .nm:hover { color: #9bc1ff; }
   .cmd.selcmd { background: #23314f; border-radius: 4px; }
-  .cmd.sev-confirmed { background: rgba(255,93,93,.09); }
-  .cmd.sev-possible { background: rgba(240,181,58,.08); }
+  /* lighter wash for rows whose key is being hovered on the keyboard (preview, no filter) */
+  .cmd.hlcmd { background: rgba(var(--blue-rgb), .18); border-radius: 4px; }
+  .cmd.sev-confirmed { background: rgba(var(--sev-confirmed-rgb), .09); }
+  .cmd.sev-possible { background: rgba(var(--sev-possible-rgb), .08); }
   .cmd .warn { cursor: help; flex: 0 0 auto; font-size: 12px; }
-  .cmd .warn.sev-confirmed { color: #ff7676; }
-  .cmd .warn.sev-possible { color: #f0b53a; }
-  .cmd .warn.sev-override { color: #6ea0ff; }
+  .cmd .warn.sev-confirmed { color: var(--sev-confirmed); }
+  .cmd .warn.sev-possible { color: var(--sev-possible); }
+  .cmd .warn.sev-override { color: var(--sev-override); }
   #conflictbadge { font-size: 12px; cursor: pointer; padding: 3px 9px; border-radius: 6px; user-select: none; }
   #conflictbadge.has { background: #2a1a1a; color: #ff9a9a; border: 1px solid #5a2a2a; }
-  #conflictbadge.none { color: #84e09a; }
-  #conflictbadge.on { outline: 2px solid #ff7676; outline-offset: 1px; }
-  #conflictbadge .sp { color: #f0b53a; }
-  #conflictbadge .so { color: #6ea0ff; }
+  #conflictbadge.none { color: var(--ok); }
+  #conflictbadge.on { outline: 2px solid var(--sev-confirmed); outline-offset: 1px; }
+  #conflictbadge .sp { color: var(--sev-possible); }
+  #conflictbadge .so { color: var(--sev-override); }
   .keybtn { background: #11141b; border: 1px solid #3a4150; color: #e6e6e6;
             border-radius: 5px; padding: 4px 9px; min-width: 92px; flex: 0 0 auto;
             font: inherit; cursor: pointer; text-align: left; }
-  .keybtn:hover { border-color: #2f6df0; }
-  .keybtn.capturing { border-color: #f0a132; background: #2a2418; color: #ffcf87; }
+  .keybtn:hover { border-color: var(--blue); }
+  .keybtn.capturing { border-color: var(--accent); background: #2a2418; color: #ffcf87; }
   .keybtn.unbound { color: #6b7280; font-style: italic; }
 </style>
 </head>
@@ -147,7 +225,7 @@
     </label>
     <span class="layout-toggle" title="Convert keybinds and relabel the keyboard; set this to match the layout of the file you load">
       <span class="lt-lbl lt-active" id="ltQ">QWERTY</span>
-      <label class="switch"><input type="checkbox" id="layoutToggle"><span class="slider"></span></label>
+      <label class="switch"><input type="checkbox" id="layoutToggle" autocomplete="off"><span class="slider"></span></label>
       <span class="lt-lbl" id="ltD">Dvorak</span>
     </span>
     <input type="text" id="pname" placeholder="profile name" style="display:none">
@@ -159,14 +237,18 @@
 <main>
   <div id="kbwrap" style="display:none">
     <div class="kbtools">
-      <input type="search" id="search" placeholder="filter hotkeys…">
-      <label class="tg"><input type="checkbox" id="shadeToggle" checked> shade keys by # bound</label>
-      <label class="tg" id="chronWrap" style="display:none"><input type="checkbox" id="chronToggle"> show Chronicles</label>
+      <input type="search" id="search" placeholder="filter hotkeys…" autocomplete="off">
+      <label class="tg"><input type="checkbox" id="shadeToggle" checked autocomplete="off"> shade keys by # bound</label>
+      <label class="tg" id="chronWrap" style="display:none"><input type="checkbox" id="chronToggle" autocomplete="off"> show Chronicles</label>
       <span id="conflictbadge" style="display:none"></span>
+      <label class="tg"><input type="checkbox" id="hideConflictsToggle" autocomplete="off"> hide conflicts</label>
       <span id="kbbanner"></span>
     </div>
-    <div class="kb" id="kb"></div>
-    <div class="kbnote">Hover a <b>command</b> to preview &middot; click a <b>command</b> to pin its key &middot; click a <b>key</b> to list its commands &middot; click a <b>group name</b> to highlight the group &middot; <b>&#9662;</b> collapses &middot; while rebinding, click a key (incl. <b>mouse</b>) to assign it.</div>
+    <div class="kbstage">
+      <aside class="cpanel" id="conflictpanel"></aside>
+      <div class="kb" id="kb"></div>
+    </div>
+    <div class="kbnote">Hover a <b>command</b> to preview &middot; click a <b>command</b> to pin its key &middot; click a <b>key</b> to list its commands &middot; click a <b>group name</b> to highlight the group &middot; <b>&#9662;</b> collapses &middot; while rebinding, click a key (incl. <b>mouse</b>) to assign it, or arm a modifier — click <b>Ctrl/Alt/Shift</b> (or press <b>Ctrl/Shift</b>) — for browser-reserved combos like <b>Ctrl+N</b>, then press the key.</div>
     <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button></div>
   </div>
   <div class="empty" id="placeholder">
@@ -539,6 +621,7 @@ let recsById=new Map();      // id -> [rec]
 let recByKey=new Map();      // vk(number) | 'ctrl'|'alt'|'shift' -> [rec]
 let groupedView=[];          // [{name, recs:[rec]}]
 let keyEls={};               // 'k'+vk | 'm'+mod -> [keyboard DOM elements]
+let cmdEls=new Map();        // rec -> command-row DOM element (rebuilt each renderList)
 let selectedKey=null;        // 'k'+vk | 'm'+mod currently filtering, or null
 let selectedGroup=null;      // group name whose heading is "selected" (keys highlighted), or null
 
@@ -614,6 +697,7 @@ let conflictByRec=new Map();  // rec -> [{other, sev, civs?}]
 let conflictKeys=new Set();
 let recSev=new Map();         // rec -> highest severity
 let keySev=new Map();         // 'k'+vk -> highest non-override severity
+let conflictClusters=[];      // [{code,ctrl,alt,shift,combo,ctx,sev,civs,members}] for the warnings panel
 let showConflictsOnly=false;
 // Command slots that are mutually exclusive by civ — a civ fields at most one, so they
 // can never both be active even in the same card. Used only where the civ dataset can't
@@ -623,7 +707,24 @@ const MUTEX_GROUPS=[
   [19053,19358],          // generic Unique Warships  <->  Thirisadai (Bengalis')
   [19136,19330,19354],    // Go to  Donjon / Krepost / Mule Cart   — civ-exclusive buildings
   [19137,19019,19159],    // Select all  Donjons / Kreposts / Mule Carts  — same
+  [19143,19060],          // Xolotl Warrior  <->  Scout Cavalry / Hussar  — civ-exclusive: the
+                          // Xolotl is trained only by American civs (no Scout line) from
+                          // captured/scenario Stables; Scout-line civs never field the Xolotl,
+                          // so the two never share a Stable card. (Xolotl has no civ node, so
+                          // the name-keyed civ dataset can't resolve this on its own.)
 ];
+// Generic "unique" command slots that EVERY civ has on a card (Castle's unique unit + its
+// three unique techs). Their names are civ-generic, so the name-keyed civ dataset can't
+// resolve them (civsForId is null) and a same-card pair would fall through to a soft
+// 'possible'. But all civs always have all of them, so two on one combo definitely clash.
+// Same-card pairs among these are forced to 'confirmed'.  [[explicit-mutex-vs-civ-data]]
+const UNIVERSAL_SLOTS=new Set([
+  19080,   // Tech: Elite Unique Unit
+  19081,   // Tech: Unique Castle Technology
+  19082,   // Tech: Unique Imperial Technology
+  19322,   // Unique Unit (Castle)
+  19187,   // Unique Unit (Donjon)
+]);
 const mutexOf=new Map();
 MUTEX_GROUPS.forEach((g,i)=>g.forEach(id=>mutexOf.set(id,i)));
 function sameMutex(a,b){ return mutexOf.has(a) && mutexOf.get(a)===mutexOf.get(b); }
@@ -639,6 +740,12 @@ const NOTE_PAIRS=[
 const noteOf=new Map();
 NOTE_PAIRS.forEach(p=>noteOf.set(Math.min(p.a,p.b)+'|'+Math.max(p.a,p.b), p.msg));
 function noteFor(a,b){ return noteOf.get(Math.min(a,b)+'|'+Math.max(a,b)) || null; }
+// Command ids that can never clash with anything — they live in their own isolated sub-mode,
+// not active at the same time as ordinary bindings. e.g. Remove Gather Point is only reachable
+// after Set Gather Point is pressed, so it's effectively its own group.  [[explicit-mutex-vs-civ-data]]
+const ISOLATED_IDS=new Set([
+  19121,   // Remove Gather Point (only usable once setting a gather point)
+]);
 // Civ availability is keyed by command id (the .hkp id), precomputed at regen time,
 // so the runtime needs no name matching.
 function civsForId(id){ return CIV ? (CIV.idToCivs[id]||null) : null; }
@@ -660,6 +767,7 @@ function uTypesOverlap(ta, tb){
   return false;                                  // two distinct unit types never coexist
 }
 function ctxClassify(ra, rb){
+  if(ISOLATED_IDS.has(ra.id) || ISOLATED_IDS.has(rb.id)) return null;   // isolated sub-mode, never clashes
   if(sameMutex(ra.id, rb.id)) return null;   // civ-exclusive alternative slots never clash
   const note=noteFor(ra.id, rb.id);
   if(note) return {sev:'override', note:note};   // edge-case caution, not a real conflict
@@ -684,6 +792,8 @@ function ctxClassify(ra, rb){
   if(la==='D'){
     if(ta==='any'||tb==='any') return {sev:'confirmed'};      // a building-wide command
     if(ta!==tb) return null;                                  // different building cards
+    if(UNIVERSAL_SLOTS.has(ra.id)&&UNIVERSAL_SLOTS.has(rb.id))
+      return {sev:'confirmed'};                               // every civ has these -> always clash
     const fa=civsForId(ra.id), fb=civsForId(rb.id);           // same card -> civ check
     if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);
       if(!ov.length) return null;                             // civ-exclusive -> not a clash
@@ -694,6 +804,7 @@ function ctxClassify(ra, rb){
 }
 function computeConflicts(){
   conflictByRec=new Map(); conflictKeys=new Set(); recSev=new Map(); keySev=new Map();
+  conflictClusters=[];
   if(!CIV) return;
   const byCombo=new Map();
   allRecs.forEach(r=>{ const e=r.e; if(!e.code) return;
@@ -708,12 +819,38 @@ function computeConflicts(){
   };
   byCombo.forEach(recs=>{
     if(recs.length<2) return;
+    // union-find the recs that actually clash (non-override), so each connected set
+    // surfaces as one panel warning ("these commands all collide on this combo")
+    const parent=recs.map((_,i)=>i);
+    const find=x=>{ while(parent[x]!==x){ parent[x]=parent[parent[x]]; x=parent[x]; } return x; };
+    const edges=[];
     for(let a=0;a<recs.length;a++) for(let b=a+1;b<recs.length;b++){
       const ra=recs[a], rb=recs[b]; if(ra.id===rb.id) continue;
       const res=ctxClassify(ra,rb);
-      if(res){ add(ra,rb,res.sev,res.civs,res.note); add(rb,ra,res.sev,res.civs,res.note); }
+      if(!res) continue;
+      add(ra,rb,res.sev,res.civs,res.note); add(rb,ra,res.sev,res.civs,res.note);
+      if(res.sev!=='override'){ const pa=find(a), pb=find(b); if(pa!==pb) parent[pa]=pb;
+        edges.push({a:a, sev:res.sev, civs:res.civs||null}); }
     }
+    if(!edges.length) return;
+    const sevByRoot=new Map(), civsByRoot=new Map();
+    edges.forEach(e=>{ const root=find(e.a);
+      if(e.sev==='confirmed') sevByRoot.set(root,'confirmed');
+      else if(!sevByRoot.has(root)) sevByRoot.set(root,'possible');
+      if(e.civs && !civsByRoot.has(root)) civsByRoot.set(root, e.civs); });
+    const byRoot=new Map();
+    recs.forEach((r,i)=>{ const root=find(i); if(!sevByRoot.has(root)) return;   // not part of any clash
+      if(!byRoot.has(root)) byRoot.set(root,[]); byRoot.get(root).push(r); });
+    byRoot.forEach((members,root)=>{
+      if(members.length<2) return;
+      const e=members[0].e;
+      conflictClusters.push({ code:e.code, ctrl:e.ctrl, alt:e.alt, shift:e.shift,
+        combo:comboLabel(e), ctx:recContext(members[0]),
+        sev:sevByRoot.get(root)||'possible', civs:civsByRoot.get(root)||null, members:members });
+    });
   });
+  conflictClusters.sort((a,b)=> a.sev===b.sev ? a.combo.localeCompare(b.combo)
+                                              : (a.sev==='confirmed'?-1:1));
 }
 function conflictTip(r){
   const lead={confirmed:'Conflict',possible:'Possible clash',override:'Caution: card overrides this global'};
@@ -732,6 +869,49 @@ function updateConflictBadge(){
   b.innerHTML=(c+p+o) ? ('⚠ '+c+' <span class="sp">⚐ '+p+'</span> <span class="so">ⓘ '+o+'</span>')
                       : '✓ no conflicts';
   b.title='Click to show only flagged commands';
+}
+// human-readable name for a conflict context code (G / R / U:type / B:tab / D:card / T:type)
+function ctxLabel(ctx){
+  if(!ctx) return '';
+  if(ctx==='G') return 'Global — active everywhere';
+  if(ctx==='R') return 'Replay controls';
+  if(ctx.indexOf(':')<0) return ctx[0]==='Z' ? 'Ungrouped command' : ctx;
+  const layer=ctx[0], rest=ctx.slice(2);
+  if(layer==='U') return 'Selected '+rest+' unit';
+  if(layer==='B') return 'Villager build menu — '+(rest==='eco'?'Economy':rest==='mil'?'Military':rest);
+  if(layer==='D') return rest+' — command card';
+  if(layer==='T') return 'Garrison / transport — '+rest;
+  return rest||ctx;
+}
+// big, color-coded confirmed/possible warnings in the panel left of the keyboard
+function renderConflictPanel(){
+  const el=document.getElementById('conflictpanel'); if(!el) return;
+  if(!CIV || (!state.base && !state.profile)){ el.innerHTML=''; return; }
+  let c=0,p=0; conflictClusters.forEach(k=>{ k.sev==='confirmed'?c++:p++; });
+  let html='<h3>Hotkey conflicts</h3>';
+  if(!conflictClusters.length){
+    el.innerHTML=html+'<div class="cok">✓ No conflicts found</div>'; return;
+  }
+  const sum=[]; if(c) sum.push('<b style="color:var(--sev-confirmed)">'+c+' confirmed</b>');
+  if(p) sum.push('<b style="color:var(--sev-possible)">'+p+' possible</b>');
+  html+='<div class="csum">'+sum.join(' &middot; ')+'</div>';
+  html+='<div class="cgrid">'+conflictClusters.map((k,i)=>
+    '<div class="cflt '+k.sev+'" data-i="'+i+'">'
+    +'<div class="chead"><span class="cico">'+(k.sev==='confirmed'?'⚠':'⚐')+'</span>'
+    +'<span class="ckey">'+esc(k.combo)+'</span>'
+    +'<span class="ctier">'+(k.sev==='confirmed'?'Confirmed':'Possible')+'</span></div>'
+    +'<div class="cctx">'+esc(ctxLabel(k.ctx))+'</div>'
+    +k.members.map(r=>'<div class="ccmd" title="'+esc(recName(r))+'">'+esc(recName(r))+'</div>').join('')
+    +(k.civs?('<div class="ccivs">affects '+k.civs.length+' civ'+(k.civs.length>1?'s':'')+'</div>'):'')
+    +'</div>'
+  ).join('')+'</div>';
+  el.innerHTML=html;
+  [...el.querySelectorAll('.cflt')].forEach(card=>{
+    const k=conflictClusters[+card.dataset.i];
+    card.onmouseenter=()=>hoverRec(k.members[0]);   // preview the clashing key on the keyboard
+    card.onmouseleave=clearHover;
+    card.onclick=()=>onKeyClick('k'+k.code);        // pin the key → filters the command list to it
+  });
 }
 
 // ---- on-screen keyboard ----
@@ -768,6 +948,8 @@ function makeKey(spec){
   const id=(disp.vk!==undefined)?('k'+disp.vk):('m'+spec.mod);
   (keyEls[id]=keyEls[id]||[]).push(el);
   el.onclick=(ev)=>onKeyClick(id, ev);
+  el.onmouseenter=()=>hoverKey(id);    // hovering a key highlights its commands in the list
+  el.onmouseleave=clearHover;
   return el;
 }
 // mouse visual: the 5 bindable mouse inputs (codes 251-255) plus L/R for shape.
@@ -784,6 +966,8 @@ function makeMouse(){
     el.innerHTML='<span class="lbl"></span>'; el.querySelector('.lbl').textContent=label; el.title=title;
     const id='k'+vk; (keyEls[id]=keyEls[id]||[]).push(el);
     el.onclick=(ev)=>onKeyClick(id, ev);
+    el.onmouseenter=()=>hoverKey(id);
+    el.onmouseleave=clearHover;
     mouse.appendChild(el);
   };
   mk(255,'▲','m-wu','Wheel Up');
@@ -825,6 +1009,7 @@ function refreshKeyboard(){
   keySev.forEach((sev,id)=>{ const cls=(sev==='confirmed')?'conflict':'clash';
     (keyEls[id]||[]).forEach(el=>el.classList.add(cls)); });
   updateConflictBadge();
+  renderConflictPanel();
 }
 function keyLabel(id){ const e=(keyEls[id]||[])[0]; return e?e.querySelector('.lbl').textContent:id; }
 
@@ -832,7 +1017,7 @@ function keyLabel(id){ const e=(keyEls[id]||[])[0]; return e?e.querySelector('.l
 function clearHighlight(){   // purely visual; does not touch the selectedGroup state
   document.querySelectorAll('.kbkey.hl,.kbkey.hl-mod').forEach(el=>el.classList.remove('hl','hl-mod'));
   document.querySelectorAll('.cmd.selcmd').forEach(el=>el.classList.remove('selcmd'));
-  document.querySelectorAll('.gname.selgroup').forEach(el=>el.classList.remove('selgroup'));
+  document.querySelectorAll('.ghighlight.selgroup').forEach(el=>el.classList.remove('selgroup'));
 }
 // re-apply the selected group's key highlight + heading marker (after edits / re-renders)
 function applyGroupHighlight(){
@@ -840,7 +1025,7 @@ function applyGroupHighlight(){
   const g=groupedView.find(x=>x.name===selectedGroup);
   if(!g){ selectedGroup=null; return; }          // group no longer exists (e.g. new file loaded)
   g.recs.forEach(hlRec);
-  document.querySelectorAll('.gname').forEach(el=>{
+  document.querySelectorAll('.ghighlight').forEach(el=>{
     if(el.dataset.group===selectedGroup) el.classList.add('selgroup'); });
 }
 function hlRec(r){
@@ -857,8 +1042,15 @@ function hoverRec(r){      // request 6: lighter preview shade
   if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-modh'));
 }
+// reverse of hoverRec: hovering a key highlights every list row bound to it (no filtering)
+function hoverKey(id){
+  const recs = id[0]==='k' ? recByKey.get(parseInt(id.slice(1))) : recByKey.get(id.slice(1));
+  if(!recs) return;
+  recs.forEach(r=>{ const el=cmdEls.get(r); if(el) el.classList.add('hlcmd'); });
+}
 function clearHover(){
   document.querySelectorAll('.kbkey.hlh,.kbkey.hl-modh').forEach(el=>el.classList.remove('hlh','hl-modh'));
+  document.querySelectorAll('.cmd.hlcmd').forEach(el=>el.classList.remove('hlcmd'));
 }
 function onCommandClick(r,item){ selectedGroup=null; clearHighlight(); hlRec(r); item.classList.add('selcmd'); }
 function onGroupClick(group, el){
@@ -870,11 +1062,12 @@ function onKeyClick(id, ev){
   // during a rebind capture, clicking a key assigns it (the only way to bind a
   // mouse button, since mouse presses can't be captured via keydown)
   if(capture){
-    const vk = id[0]==='k' ? parseInt(id.slice(1)) : 0;
-    if(vk){
-      applyBinding(capture.rec, vk, ev&&ev.ctrlKey?1:0, ev&&ev.altKey?1:0, ev&&ev.shiftKey?1:0);
-      capture.btn.classList.remove('capturing'); capture=null; afterEdit();
-    } else { cancelCapture(); }   // a bare modifier key can't be a binding
+    if(id[0]==='m'){                       // a modifier key -> toggle it into the armed set
+      const m=id.slice(1); capture.mods[m]=capture.mods[m]?0:1;
+      capture.btn.textContent=capturePromptText(); updateArmedVisuals();
+      return;
+    }
+    commitCapture(parseInt(id.slice(1)), ev);   // a real key (incl. mouse) -> assign it
     return;
   }
   if(selectedKey===id){ clearKeyFilter(); return; }
@@ -925,6 +1118,7 @@ function expandAll(){ collapsed.clear(); renderList(); }
 function makeCmd(r){
   const e=r.e;
   const item=document.createElement('div'); item.className='cmd';
+  cmdEls.set(r, item);                 // so a key hover can find and highlight this row
   item.onmouseenter=()=>hoverRec(r);   // hovering anywhere on the row previews its keys
   item.onmouseleave=clearHover;
   const nm=document.createElement('div'); nm.className='nm';
@@ -977,17 +1171,24 @@ function buildGroupEl(v, forceOpen){
   const open=forceOpen || !collapsed.has(group.name);
   const grp=document.createElement('div'); grp.className='grp'+(open?'':' collapsed');
   const h=document.createElement('h2');
+  // collapse/expand button: caret + the group name
+  const collapseBtn=document.createElement('button'); collapseBtn.className='gcollapse';
+  collapseBtn.title='Collapse / expand this group';
   const caret=document.createElement('span'); caret.className='caret';
   caret.innerHTML=open?'&#9662;':'&#9656;';   // ▾ / ▸
-  caret.title='Collapse / expand this group';
-  caret.onclick=(ev)=>{ ev.stopPropagation(); toggleCollapse(group.name); };
-  const gname=document.createElement('span');
-  gname.className='gname'+(selectedGroup===group.name?' selgroup':'');
-  gname.dataset.group=group.name;
-  gname.textContent=group.name; gname.title='Highlight this group’s keys (click again to clear)';
-  gname.onclick=()=>onGroupClick(group, gname);
+  const gname=document.createElement('span'); gname.className='gname'; gname.textContent=group.name;
+  collapseBtn.append(caret,gname);
+  collapseBtn.onclick=()=>toggleCollapse(group.name);
+  // highlight button: fills the rest of the heading, holds the eye icon + key count
+  const hlBtn=document.createElement('button');
+  hlBtn.className='ghighlight'+(selectedGroup===group.name?' selgroup':'');
+  hlBtn.dataset.group=group.name;
+  hlBtn.title='Highlight this group’s keys (click again to clear)';
+  const eye=document.createElement('span'); eye.className='geye'; eye.textContent='👁';
   const pill=document.createElement('span'); pill.className='pill'; pill.textContent=recs.length;
-  h.append(caret,gname,pill);
+  hlBtn.append(eye,pill);
+  hlBtn.onclick=()=>onGroupClick(group, hlBtn);
+  h.append(collapseBtn,hlBtn);
   grp.appendChild(h);
   if(open){
     const grid=document.createElement('div'); grid.className='cmdgrid';
@@ -1003,6 +1204,9 @@ function renderList(){   // wrapper: keep scroll position so edits don't jump to
 }
 function _renderList(){
   const content=document.getElementById('content'); content.innerHTML='';
+  cmdEls=new Map();   // rows are rebuilt below; drop stale rec->element mappings
+  clearHover();   // rebuilding the list destroys any hovered row, so its mouseleave
+                  // never fires — drop its now-orphaned keyboard preview here
   updateBanner();
   if(!state.base && !state.profile) return;
   const filter=document.getElementById('search').value.trim().toLowerCase();
@@ -1039,12 +1243,33 @@ function afterEdit(){ indexKeys(); computeConflicts(); refreshKeyboard(); clearH
 // ---- rebind / unbind (each entry independent — no syncing) ----
 function startCapture(rec, btn){
   cancelCapture();
-  capture={rec,btn};
+  capture={rec,btn,mods:{ctrl:0,alt:0,shift:0}};   // mods = click-armed modifiers
   btn.classList.add('capturing');
   btn.textContent='press a key…';
+  updateArmedVisuals();
 }
 function cancelCapture(){
-  if(capture){ capture.btn.classList.remove('capturing'); refreshBtn(capture.btn,capture.rec.e); capture=null; }
+  if(capture){ capture.btn.classList.remove('capturing'); refreshBtn(capture.btn,capture.rec.e);
+    capture=null; updateArmedVisuals(); }
+}
+// label the rebind button with any armed modifiers, e.g. "Ctrl+Alt+ press a key…"
+function capturePromptText(){
+  const p=[]; if(capture.mods.ctrl)p.push('Ctrl'); if(capture.mods.alt)p.push('Alt'); if(capture.mods.shift)p.push('Shift');
+  return (p.length?p.join('+')+'+ ':'')+'press a key…';
+}
+// mirror the armed modifiers onto the on-screen modifier keys
+function updateArmedVisuals(){
+  document.querySelectorAll('.kbkey.armed').forEach(el=>el.classList.remove('armed'));
+  if(!capture) return;
+  ['ctrl','alt','shift'].forEach(m=>{ if(capture.mods[m]) (keyEls['m'+m]||[]).forEach(el=>el.classList.add('armed')); });
+}
+// commit a binding: combine the click-armed modifiers with any physically-held ones
+function commitCapture(code, ev){
+  applyBinding(capture.rec, code,
+    capture.mods.ctrl ||(ev&&ev.ctrlKey ?1:0),
+    capture.mods.alt  ||(ev&&ev.altKey  ?1:0),
+    capture.mods.shift||(ev&&ev.shiftKey?1:0));
+  capture.btn.classList.remove('capturing'); capture=null; updateArmedVisuals(); afterEdit();
 }
 function refreshBtn(btn,e){
   btn.textContent=comboLabel(e);
@@ -1063,9 +1288,12 @@ window.addEventListener('keydown', ev=>{
   if(!capture) return;
   ev.preventDefault();
   const kc=GECKO[ev.keyCode]||ev.keyCode;  // normalise Firefox ;=- codes
-  if(MODS[kc]) return;                     // wait for a non-modifier key
-  applyBinding(capture.rec, kc, ev.ctrlKey?1:0, ev.altKey?1:0, ev.shiftKey?1:0);
-  capture.btn.classList.remove('capturing'); capture=null; afterEdit();
+  if(MODS[kc]){                             // a bare modifier never commits; Ctrl/Shift arm it
+    const m = kc===17?'ctrl' : kc===16?'shift' : null;   // 18=Alt skipped (triggers the browser menu)
+    if(m && !capture.mods[m]){ capture.mods[m]=1; capture.btn.textContent=capturePromptText(); updateArmedVisuals(); }
+    return;
+  }
+  commitCapture(kc, ev);                    // base key + armed/held modifiers
 }, true);
 // left-click off the rebind button / keyboard cancels an in-progress capture
 window.addEventListener('click', ev=>{
@@ -1173,12 +1401,29 @@ document.getElementById('shadeToggle').addEventListener('change', e=>{
 document.getElementById('chronToggle').addEventListener('change', e=>{
   hideChronicles=!e.target.checked; buildModel(); refreshKeyboard(); renderList();
 });
+document.getElementById('hideConflictsToggle').addEventListener('change', e=>{
+  // hides the panel + per-command conflict styling; the toolbar conflict badge stays
+  document.body.classList.toggle('hide-conflicts', e.target.checked);
+});
 document.getElementById('collapseAll').addEventListener('click', collapseAll);
 document.getElementById('expandAll').addEventListener('click', expandAll);
 document.getElementById('save').addEventListener('click', save);
 document.getElementById('layoutToggle').addEventListener('change', e=>setLayout(e.target.checked?'dvorak':'qwerty'));
 document.getElementById('pname').addEventListener('input', e=>{ state.name=e.target.value; updateFileStatus(); });
 renderKeyboard();
+// Browsers may restore form-control state across a reload, but our JS state always starts
+// at its defaults — so force every toggle back in sync with that default on load (and on
+// bfcache restore), otherwise a restored checkbox can disagree with the actual state (e.g.
+// the layout switch showing Dvorak while the keyboard loaded as QWERTY).
+function syncTogglesToState(){
+  const set=(id,checked)=>{ const el=document.getElementById(id); if(el) el.checked=checked; };
+  set('shadeToggle', shadeByCount);        // default on
+  set('chronToggle', !hideChronicles);     // default off (Chronicles hidden)
+  set('hideConflictsToggle', document.body.classList.contains('hide-conflicts'));
+  syncLayoutToggle();                      // matches the layout switch + labels to `layout`
+}
+syncTogglesToState();
+window.addEventListener('pageshow', syncTogglesToState);
 function applyData(d){
   strings = d.strings || {};
   CIV = { idToCivs:(d.civ&&d.civ.idToCivs)||{}, units:new Set((d.civ&&d.civ.units)||[]) };

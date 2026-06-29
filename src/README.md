@@ -132,7 +132,13 @@ co-occur:
 - **Mutex slots** (`MUTEX_GROUPS`, by command id) → never clash. For civ-exclusive sets the
   civ dataset can't resolve from names: the generic **Unique Warships** slot vs **Thirisadai**;
   the global **Go to / Select all** commands for the civ-unique buildings (Donjon / Krepost /
-  Mule Cart), which are otherwise `G`+`G` = confirmed. Checked first in `ctxClassify`.
+  Mule Cart), which are otherwise `G`+`G` = confirmed; and **Xolotl Warrior** vs the **Scout
+  Cavalry / Hussar** line (the Xolotl is trained only by the American civs — which have no Scout
+  line — from captured/scenario Stables, so the two never share a Stable card). Checked first in
+  `ctxClassify`.
+- **Isolated ids** (`ISOLATED_IDS`, by command id) → never clash with anything, because they
+  live in their own sub-mode that isn't active alongside ordinary bindings (e.g. **Remove Gather
+  Point**, only reachable after Set Gather Point is pressed). Checked first in `ctxClassify`.
 - **Note pairs** (`NOTE_PAIRS`, by command id) → shown as an informational note (override tier:
   blue ⓘ, no key ring, not a conflict) with a custom message instead of a civ flag — for pairs
   that are co-bindable but practically a non-issue (e.g. **Infantry Unique Units** vs **Eagle
@@ -146,7 +152,10 @@ co-occur:
   overlapping or can't-verify → confirmed.
 - same `T` layer → confirmed iff identical sub-key.
 - `D` layer: `D:any` overlaps all cards → confirmed; different cards → no clash; **same card**
-  → civ check by id (`civsForId` / `isUnitId`): both units + civ overlap → confirmed; building/tech
+  → **universal slots** first (`UNIVERSAL_SLOTS`, by id — the generic Unique-Unit / Elite-UU /
+  Unique-Castle / Unique-Imperial slots every civ has at its Castle; civ-generic names so the
+  dataset can't resolve them, but all civs always have all of them) → **confirmed**; otherwise a
+  civ check by id (`civsForId` / `isUnitId`): both units + civ overlap → confirmed; building/tech
   overlap → **possible**; civ-exclusive (no shared civ) → suppressed; can't civ-verify → **possible**.
 - different layers → no clash. Three tiers shown: **confirmed** (red ⚠), **possible** (amber ⚐),
   **override** (blue ⓘ). Civ availability is keyed by command id (`civ_data.json`), precomputed at
