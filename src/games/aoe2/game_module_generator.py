@@ -1,16 +1,18 @@
 #!/usr/bin/python
-"""AoE2:DE hotkey data + static-site build tool.
+"""AoE2:DE game module generator -- data + static-site build for the hotkey editor.
 
-The hotkey editor is a single self-contained web page (site/index.html) that does all
-.hkp parsing/writing in the browser — there is no server.  This script is the
-build toolchain for that page:
+The hotkey editor is a single self-contained web page that does all .hkp parsing/
+writing in the browser -- there is no server.  This is the AoE2 game's own toolchain
+(other games get their own generator under games/<game>/):
 
-    python3 hotkey_editor.py --regen   # rebuild the 3 json data files from a game install
-    python3 hotkey_editor.py --build   # inline page.html + the json -> site/index.html (default)
+    python3 games/aoe2/game_module_generator.py --regen   # rebuild the 3 json data files from a game install
+    python3 games/aoe2/game_module_generator.py --build   # inline page.html + the json -> site/aoe2/index.html (default)
 
-The page's source is page.html; --build stamps the json data into it to produce the
-deployable site/index.html.  Binary .hkp logic still lives in hkp_parser.py for the CLI /
-round-trip checks; the browser uses an equivalent JS port embedded in page.html.
+The UI shell is the repo-root page.html; --build inlines this game's json data into it
+(via the shared page_assembler) to produce the deployable site/aoe2/index.html, and
+refreshes the site/index.html launcher.  Binary .hkp logic lives in this folder's
+hkp_parser.py (the CLI / round-trip oracle); the browser uses an equivalent JS port
+embedded in page.html.
 
 Stdlib only (works on Python 3.7).
 """
@@ -20,7 +22,14 @@ import os
 import re
 import sys
 
-_HERE = os.path.dirname(os.path.abspath(__file__))
+_HERE = os.path.dirname(os.path.abspath(__file__))            # games/aoe2/
+_ROOT = os.path.dirname(os.path.dirname(_HERE))               # repo root
+_DATA_DIR = os.path.join(_HERE, 'data')                       # this game's vendored json
+_GAME_SLUG = 'aoe2'
+_GAME_NAME = 'AoE2:DE'
+
+sys.path.insert(0, _ROOT)                                     # for the shared page_assembler
+import page_assembler                                         # noqa: E402
 
 
 # --- vendored static data, all generated from a game install by `--regen` ------
@@ -358,7 +367,7 @@ def regen():
     civ = build_civ_data(dat, ids)
     for fname, data in (('strings.json', strings_out), ('card_data.json', card),
                         ('civ_data.json', civ)):
-        with open(os.path.join(_HERE, fname), 'w', encoding='utf-8') as f:
+        with open(os.path.join(_DATA_DIR, fname), 'w', encoding='utf-8') as f:
             f.write(data)
         print('wrote %s (%d KB)' % (fname, len(data.encode('utf-8')) // 1024))
     return 0
@@ -367,34 +376,33 @@ def regen():
 # --- build the single-file site ----------------------------------------
 
 def build():
-    """Assemble the self-contained site/index.html from page.html + the json data."""
-    page_path = os.path.join(_HERE, 'page.html')
-    if not os.path.isfile(page_path):
-        print('ERROR: page.html not found next to this script.')
-        return 1
-    page = open(page_path, encoding='utf-8').read()
+    """Assemble the self-contained site/aoe2/index.html from page.html + module.js + json.
+
+    The launcher is the orchestrator's job (build.py / page_assembler.build_all), so
+    this only writes this game's page.  Returns (slug, name) on success, or None on
+    failure -- the contract page_assembler.discover_games()/build_all() rely on.
+    """
+    page_path = os.path.join(_ROOT, 'page.html')
+    module_path = os.path.join(_HERE, 'module.js')   # this game's engine-injected code
     try:
         data = {
-            'strings': json.load(open(os.path.join(_HERE, 'strings.json'), encoding='utf-8')),
-            'civ': json.load(open(os.path.join(_HERE, 'civ_data.json'), encoding='utf-8')),
-            'card': json.load(open(os.path.join(_HERE, 'card_data.json'), encoding='utf-8')),
+            'strings': json.load(open(os.path.join(_DATA_DIR, 'strings.json'), encoding='utf-8')),
+            'civ': json.load(open(os.path.join(_DATA_DIR, 'civ_data.json'), encoding='utf-8')),
+            'card': json.load(open(os.path.join(_DATA_DIR, 'card_data.json'), encoding='utf-8')),
         }
+        module_js = open(module_path, encoding='utf-8').read()
     except FileNotFoundError as e:
         print('ERROR: missing data file (%s); run --regen first.' % e.filename)
-        return 1
-    # Compact, and neutralise any "</script>"/"</..." that could close the tag early.
-    blob = json.dumps(data, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
-    marker = 'window.HKP_DATA = null; /* __HKP_DATA__ */'
-    if marker not in page:
-        print('ERROR: data marker not found in page.html.')
-        return 1
-    out = page.replace(marker, 'window.HKP_DATA = %s; /* __HKP_DATA__ */' % blob)
-    out_dir = os.path.join(_HERE, 'site')      # deployable lives in site/ (e.g. Cloudflare Pages output dir)
-    os.makedirs(out_dir, exist_ok=True)
-    with open(os.path.join(out_dir, 'index.html'), 'w', encoding='utf-8') as f:
-        f.write(out)
-    print('wrote site/index.html (%d KB)' % (len(out.encode('utf-8')) // 1024))
-    return 0
+        return None
+    site_dir = os.path.join(_ROOT, 'site')     # deployable (e.g. Cloudflare Pages output dir)
+    out_path = os.path.join(site_dir, _GAME_SLUG, 'index.html')
+    try:
+        nbytes = page_assembler.assemble(page_path, data, out_path, module_js, _GAME_SLUG)
+    except RuntimeError as e:
+        print('ERROR: %s' % e)
+        return None
+    print('wrote site/%s/index.html (%d KB)' % (_GAME_SLUG, nbytes // 1024))
+    return (_GAME_SLUG, _GAME_NAME)
 
 
 if __name__ == '__main__':
@@ -402,6 +410,12 @@ if __name__ == '__main__':
     if '--regen' in args:
         sys.exit(regen())
     if '--build' in args or not args:
-        sys.exit(build())
+        # Build just this game, then refresh the launcher across every built game so it
+        # stays complete (use build.py to (re)build all games at once).
+        if build() is None:
+            sys.exit(1)
+        page_assembler.write_launcher_for_built(_ROOT)
+        print('wrote site/index.html (launcher)')
+        sys.exit(0)
     print(__doc__)
     sys.exit(2)

@@ -1,0 +1,1666 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>AoE2:DE Hotkey Editor &amp; Converter</title>
+<style>
+  :root {
+    color-scheme: dark;
+    /* semantic palette — single source of truth (rings, list markers, badge,
+       buttons and the conflict panel all read these) */
+    --blue-rgb: 47,109,240;
+    --blue:       rgb(var(--blue-rgb));   /* primary action / selection */
+    --blue-light: #6ea0ff;                /* lighter blue for hovers & borders */
+    --sev-confirmed-rgb: 255,93,93;
+    --sev-possible-rgb:  240,181,58;
+    --sev-confirmed: rgb(var(--sev-confirmed-rgb));
+    --sev-possible:  rgb(var(--sev-possible-rgb));
+    --sev-override:  var(--blue-light);   /* "global shadowed by a card" caution */
+    --key-sel: #3b82f6;   /* selected/filtered key (cobalt blue, away from the warm conflict hues) */
+    --accent:  #f0a132;   /* active text/key filter + rebind-in-progress accent */
+    --ok:      #84e09a;   /* success / "no conflicts" */
+  }
+  * { box-sizing: border-box; }
+  /* always reserve the scrollbar gutter so filtering the list (which can remove the page
+     scrollbar) doesn't change the viewport width and shift the centre-pinned keyboard */
+  html { scrollbar-gutter: stable; }
+  body { margin: 0; font: 14px/1.4 system-ui, Segoe UI, sans-serif;
+         background: #1d2026; color: #e6e6e6; }
+  header { position: relative; padding: 16px 18px; background: #151821; border-bottom: 1px solid #2c313d; }
+  /* "?" help badge + click popup next to the Download button */
+  .helpwrap { position: relative; display: inline-flex; }
+  .helpq { display: inline-flex; align-items: center; justify-content: center; width: 42px; height: 42px;
+           border-radius: 50%; border: 1px solid #3a4150; color: #9aa3b2; font-size: 24px; font-weight: 700;
+           cursor: pointer; user-select: none; }
+  .helpq:hover { border-color: var(--blue); color: #cfe0ff; }
+  .helppop { display: none; position: absolute; top: calc(100% + 8px); left: 0; z-index: 50; width: 360px;
+             background: #11141b; border: 1px solid #3a4150; border-radius: 8px; padding: 12px 14px;
+             font-size: 13.5px; line-height: 1.5; color: #cdd3de; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
+  .helppop.open { display: block; }
+  .helppop p { margin: 0 0 8px; }
+  .helppop p:last-child { margin: 0; }
+  .helppop code { display: inline-block; background: #0e1117; border: 1px solid #2c313d; border-radius: 4px;
+                  padding: 2px 6px; font-size: 12px; color: #e3ecff; word-break: break-all; }
+  /* GitHub link + bug-report note, top-right of the header */
+  .ghcorner { position: absolute; top: 16px; right: 34px; display: flex; flex-direction: column;
+              align-items: center; gap: 4px; text-align: center; }
+  .ghlink { color: #9aa3b2; display: inline-flex; }
+  .ghlink:hover { color: #fff; }
+  .ghnote { font-size: 11px; color: #8c93a3; max-width: 130px; }
+  .ghnote a { color: #9bc1ff; text-decoration: none; }
+  .ghnote a:hover { text-decoration: underline; }
+  h1 { margin: 0 0 8px; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  .gamesel { font: inherit; background: #11141b; color: #e6e6e6; border: 1px solid #3a4150;
+             border-radius: 5px; padding: 1px 6px; cursor: pointer; }
+  .backupwarn { margin-left: 10px; font-size: 12px; font-weight: 700; color: var(--accent); }
+  .sub { color: #9aa3b2; font-size: 12px; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center;
+         margin-top: 14px; }
+  button, .filebtn { background: var(--blue); color: #fff; border: 0; border-radius: 6px;
+           padding: 7px 12px; font-size: 13px; cursor: pointer; }
+  button.ghost { background: #2c313d; }
+  button.sm { padding: 4px 9px; font-size: 12px; background: #2c313d; }
+  button:disabled { opacity: .45; cursor: default; }
+  .filebtn { display: inline-block; }
+  input[type=file] { display: none; }
+  input[type=search], input[type=text] { background: #11141b; border: 1px solid #2c313d;
+           color: #e6e6e6; border-radius: 6px; padding: 7px 10px; font-size: 13px; }
+  main { padding: 0 18px 60px; }
+  /* groups are assigned to fixed columns by JS to balance total command count */
+  #content { display: flex; gap: 26px; align-items: flex-start; padding-top: 6px; }
+  .col { flex: 0 1 320px; max-width: 320px; min-width: 0; }   /* fixed width; don't stretch to fill */
+  .pill { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #2c313d;
+          color: #aeb6c4; margin-left: 6px; }
+  .empty { color: #8c93a3; padding: 40px 0; text-align: center; }
+  .err { color: #ff8a8a; }
+  .hint { color: #9aa3b2; font-size: 12px; margin-top: 10px; }
+  .chip { font-size: 12px; padding: 3px 10px; border-radius: 12px; margin-right: 6px;
+          display: inline-block; }
+  .chip.ok { background: #163a1f; color: var(--ok); border: 1px solid #2a6b3c; }
+  .chip.need { background: #3a2316; color: #ffb47f; border: 1px solid #6b452a; }
+
+  /* sticky visualizer + toolbar */
+  #kbwrap { position: sticky; top: 0; z-index: 4; background: #1d2026;
+            border-bottom: 1px solid #2c313d; margin: 0 -18px 6px; padding: 12px 18px 10px; }
+  .kbtools { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; margin-bottom: 10px; }
+  #search { min-width: 220px; }
+  .tg { font-size: 12px; color: #cdd3de; display: inline-flex; align-items: center; gap: 5px; cursor: pointer; }
+  .layout-toggle { display: inline-flex; align-items: center; gap: 8px; font-size: 12px; color: #9aa3b2; }
+  .lt-lbl.lt-active { color: #fff; font-weight: 600; }
+  .switch { position: relative; display: inline-block; width: 42px; height: 22px; }
+  .switch input { opacity: 0; width: 0; height: 0; }
+  .switch .slider { position: absolute; inset: 0; background: #3a4150; border-radius: 22px; cursor: pointer; transition: .15s; }
+  .switch .slider:before { content: ''; position: absolute; height: 16px; width: 16px; left: 3px; top: 3px; background: #cdd3de; border-radius: 50%; transition: .15s; }
+  .switch input:checked + .slider { background: var(--blue); }
+  .switch input:checked + .slider:before { transform: translateX(20px); background: #fff; }
+  #kbbanner { font-size: 12px; color: #ffcf87; }
+  #kbbanner b { color: #fff; }
+  #kbbanner button { padding: 2px 8px; font-size: 11px; background: #4a3a1a; margin-left: 8px; }
+  #kbbanner.active { border: 1px solid var(--accent); background: #2a2418; padding: 3px 10px; border-radius: 6px; }
+  #search.has-text { border-color: var(--accent); }
+  .listtools { display: flex; gap: 8px; margin-top: 10px; }
+  /* keyboard is pinned to the page centre (middle column, equal side gutters); the conflict
+     panel fills the whole left gutter up to it, the right gutter mirrors it as empty space */
+  .kbstage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+             gap: 64px; align-items: start; }
+  .kb { grid-column: 2; display: flex; gap: 20px; flex-wrap: wrap; align-items: flex-start; justify-content: center; }
+  .kbsec { display: flex; flex-direction: column; gap: 4px; }
+  .kbrow { display: flex; gap: 4px; }
+  .kbkey { height: 34px; min-width: 34px; border: 1px solid #3a4150; border-radius: 5px;
+           background: #11141b; color: #cdd3de; font-size: 11px; display: flex;
+           align-items: center; justify-content: center; cursor: pointer; position: relative;
+           user-select: none; padding: 0 3px; white-space: nowrap; }
+  .kbkey:hover { border-color: var(--blue-light); }
+  .kbkey.kbblank { visibility: hidden; }
+  /* fill shade scales with how many commands use the key (--shade set in JS) */
+  .kbkey.has { background: rgba(74,124,214, var(--shade,.4)); border-color: #3a5a86; color: #e3ecff; }
+  .kbkey.hl-mod { background: rgba(58,150,150,.85); border-color: #3a7d7d; color: #eafdfd; }
+  .kbkey.hl { background: var(--blue); border-color: var(--blue-light); color: #fff;
+              box-shadow: 0 0 0 2px rgba(var(--blue-rgb),.45); }
+  /* hover preview uses a lighter shade; declared after .hl so it shows on shared keys */
+  .kbkey.hl-modh { background: rgba(96,200,200,.6); border-color: #5fc0c0; color: #effdfd; }
+  .kbkey.hlh { background: #6f9bf0; border-color: #aeccff; color: #fff; }
+  .kbkey.sel { outline: 2px solid var(--key-sel); outline-offset: 1px; z-index: 1; }
+  /* a modifier key clicked-armed during a rebind (so browser-reserved combos like Ctrl+N
+     can be assigned without physically holding the modifier) */
+  .kbkey.armed { background: #2a2418; border-color: var(--accent); color: #ffcf87;
+                 box-shadow: 0 0 0 2px rgba(240,161,50,.5); z-index: 1; }
+  .kbkey.conflict { box-shadow: 0 0 0 2px var(--sev-confirmed); z-index: 1; }
+  .kbkey.clash { box-shadow: 0 0 0 2px var(--sev-possible); z-index: 1; }
+  /* interaction guide in the right gutter (grid col 3), mirroring the conflict panel on the left */
+  .khelp { grid-column: 3; min-width: 0; margin-left: 18px; font-size: 12px; color: #9aa3b2; }
+  .khelp h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
+  .khsec { margin-bottom: 14px; }
+  .khsec { display: flex; align-items: center; gap: 14px; }          /* visual on the left, bullets on the right */
+  /* every visual gets the same 240px slot so all bullet lists start at the same x */
+  .khsec .khvis { flex: 0 0 240px; display: flex; align-items: center; justify-content: center; }
+  .khbul { margin: 0; padding-left: 16px; flex: 1 1 auto; min-width: 0; }
+  .khbul li { margin: 3px 0; line-height: 1.35; }
+  .khbul b { color: #cfe0ff; }
+  .khnote { margin: 0; padding-top: 12px; border-top: 1px solid #2c313d; line-height: 1.4; }
+  .khnote b { color: #cfe0ff; }
+  /* sample visuals reuse the real component styles, but are non-interactive */
+  .khvis .kbkey { cursor: default; }
+  .khvis .kbkey:hover { border-color: #3a4150; }
+  /* group + command samples share one width so the two examples line up */
+  .khgrpdemo { width: 240px; display: flex; align-items: center; gap: 6px; padding-bottom: 4px;
+               border-bottom: 1px solid #2c313d; color: #8c93a3; text-transform: uppercase;
+               letter-spacing: .04em; font-size: 13px; }
+  .khgrpdemo .khgrp-r { margin-left: auto; display: flex; align-items: center; gap: 6px; }
+  .khvis .cmd { width: 240px; cursor: default; }
+  /* conflict warnings panel (left of the keyboard) — cards laid out in up to 3 columns that
+     share one scroll container (max-width caps the column count, the grid auto-fills) */
+  .cpanel { grid-column: 1; min-width: 240px; max-height: 264px; overflow-y: auto; padding-right: 2px; }
+  /* "hide conflicts" toggle: drop the panel (keyboard stays centred in col 2) and every
+     conflict cue — list row tints, the ⚠/⚐/ⓘ markers, and the keyboard key rings. Only the
+     toolbar badge is intentionally left intact. */
+  body.hide-conflicts .cpanel { display: none; }
+  body.hide-conflicts .cmd.sev-confirmed,
+  body.hide-conflicts .cmd.sev-possible { background: none; }
+  body.hide-conflicts .cmd .warn { display: none; }
+  body.hide-conflicts .kbkey.conflict,
+  body.hide-conflicts .kbkey.clash { box-shadow: none; }
+  body.hide-instructions .khelp { display: none; }   /* "show instructions" toggle (keyboard stays centred) */
+  .cpanel h3 { margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
+  .cpanel .csum { font-size: 12px; color: #aeb6c4; margin-bottom: 10px; }
+  .cgrid { display: grid; grid-template-columns: repeat(auto-fill, minmax(215px, 1fr));
+           gap: 8px; align-content: start; }
+  .cpanel .csum b { font-weight: 700; }
+  .cpanel .cok { display: flex; align-items: center; gap: 8px; color: var(--ok); font-size: 13px;
+                 background: rgba(132,224,154,.08); border: 1px solid #2a6b3c; border-radius: 8px; padding: 10px 12px; }
+  .cflt { border: 1px solid #2c313d; border-left-width: 4px; border-radius: 8px;
+          padding: 8px 10px; cursor: pointer; }
+  .cflt:hover { border-color: #4a5266; background: #20242d; }
+  .cflt.confirmed { border-left-color: var(--sev-confirmed); background: rgba(var(--sev-confirmed-rgb), .07); }
+  .cflt.possible  { border-left-color: var(--sev-possible);  background: rgba(var(--sev-possible-rgb), .06); }
+  .cflt .chead { display: flex; align-items: center; gap: 8px; }
+  .cflt .cico { font-size: 15px; line-height: 1; }
+  .cflt.confirmed .cico { color: var(--sev-confirmed); }
+  .cflt.possible  .cico { color: var(--sev-possible); }
+  .cflt .ckey { font-weight: 700; font-size: 14px; color: #fff; background: #11141b;
+                border: 1px solid #3a4150; border-radius: 5px; padding: 1px 8px; white-space: nowrap; }
+  .cflt .ctier { margin-left: auto; font-size: 10px; text-transform: uppercase; letter-spacing: .05em; }
+  .cflt.confirmed .ctier { color: var(--sev-confirmed); }
+  .cflt.possible  .ctier { color: var(--sev-possible); }
+  .cflt .cctx { font-size: 11px; color: #9aa3b2; margin: 6px 0 4px; }
+  .cflt .ccmd { font-size: 13px; color: #dfe5ee; padding: 1px 0 1px 14px; position: relative;
+                overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .cflt .ccmd:before { content: '•'; position: absolute; left: 3px; color: #5d6675; }
+  .cflt .ccivs { font-size: 11px; color: #8c93a3; margin-top: 4px; }
+  /* mouse visual (codes 251-255) */
+  .mousewrap { align-items: center; }
+  .mousecap { font-size: 11px; color: #8c93a3; text-transform: uppercase; letter-spacing: .04em; margin-bottom: 6px; }
+  .mouse { position: relative; width: 96px; height: 146px; margin-left: 12px; }
+  .mbody { position: absolute; inset: 0; background: #0e1117; border: 1px solid #3a4150; border-radius: 48px 48px 22px 22px; }
+  .mface { position: absolute; top: 6px; width: 30px; height: 46px; border: 1px solid #3a4150; background: #11141b;
+           z-index: 1; display: flex; align-items: flex-start; justify-content: center; color: #5d6675;
+           font-size: 10px; padding-top: 4px; }
+  .mface.ml { left: 6px; border-radius: 28px 4px 0 0; }
+  .mface.mr { right: 6px; border-radius: 4px 28px 0 0; }
+  .kbkey.mbtn { position: absolute; z-index: 2; min-width: 0; height: auto; padding: 0; font-size: 11px; }
+  .mbtn.m-wu { left: 36px; top: 6px; width: 24px; height: 19px; border-radius: 9px 9px 0 0; }
+  .mbtn.m-mid { left: 36px; top: 25px; width: 24px; height: 22px; border-radius: 0; }
+  .mbtn.m-wd { left: 36px; top: 47px; width: 24px; height: 19px; border-radius: 0 0 9px 9px; }
+  .mbtn.m-x2 { left: -10px; top: 28px; width: 20px; height: 26px; border-radius: 7px 0 0 7px; }
+  .mbtn.m-x1 { left: -10px; top: 56px; width: 20px; height: 26px; border-radius: 7px 0 0 7px; }
+
+  /* grouped, multi-column command list */
+  .grp { margin: 0 0 16px; }
+  .grp h2 { display: flex; align-items: stretch; gap: 6px; font-size: 13px;
+            text-transform: uppercase; letter-spacing: .04em; color: #8c93a3;
+            border-bottom: 1px solid #2c313d; padding: 0; margin: 0 0 6px; }
+  /* both heading controls are bare buttons that inherit the h2's text styling and own the
+     full header height, so the band between dividers is entirely clickable button */
+  .gcollapse, .ghighlight { background: none; border: none; font: inherit; color: inherit;
+            text-transform: inherit; letter-spacing: inherit; cursor: pointer; border-radius: 4px;
+            display: flex; align-items: center; min-width: 0; min-height: 36px; }
+  /* collapse/expand button: caret + name, sized to its content */
+  .gcollapse { gap: 4px; padding: 0 6px 0 0; flex: 0 1 auto; min-width: 70%; }
+  .gcollapse:hover { background: #2c313d; color: #cfe0ff; }
+  .caret { display: flex; align-items: center; justify-content: center; width: 32px;
+           flex: 0 0 auto; color: #8c93a3; user-select: none; }
+  .gname { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  /* highlight button: takes the rest of the row, eye icon + count pushed to the right */
+  .ghighlight { flex: 1 1 auto; justify-content: flex-end; gap: 6px; padding: 0 8px; }
+  .ghighlight:hover { background: #2c313d; color: #cfe0ff; }
+  .ghighlight.selgroup { background: #23314f; color: #cfe0ff; }
+  .geye { font-size: 20px; line-height: 1; opacity: .8; }
+  .grp h2 .pill { margin-left: 0; }
+  .grp.collapsed .cmdgrid { display: none; }
+  /* collapsed: no grid below, so drop the header's bottom margin and tighten the group gap */
+  .grp.collapsed { margin-bottom: 6px; }
+  .grp.collapsed h2 { margin-bottom: 0; }
+  .cmdgrid { display: block; }   /* commands stack vertically within their group */
+  .cmd { display: flex; align-items: center; gap: 8px; padding: 3px 6px;
+         border-bottom: 1px solid #23272f; min-width: 0; }
+  .cmd .nm { flex: 1 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis;
+             white-space: nowrap; cursor: pointer; }
+  .cmd .nm:hover { color: #9bc1ff; }
+  .cmd.selcmd { background: #23314f; border-radius: 4px; }
+  /* lighter wash for rows whose key is being hovered on the keyboard (preview, no filter) */
+  .cmd.hlcmd { background: rgba(var(--blue-rgb), .18); border-radius: 4px; }
+  .cmd.sev-confirmed { background: rgba(var(--sev-confirmed-rgb), .09); }
+  .cmd.sev-possible { background: rgba(var(--sev-possible-rgb), .08); }
+  .cmd .warn { cursor: help; flex: 0 0 auto; font-size: 12px; }
+  .cmd .warn.sev-confirmed { color: var(--sev-confirmed); }
+  .cmd .warn.sev-possible { color: var(--sev-possible); }
+  .cmd .warn.sev-override { color: var(--sev-override); }
+  #conflictbadge { font-size: 12px; cursor: pointer; padding: 3px 9px; border-radius: 6px; user-select: none; }
+  #conflictbadge.has { background: #2a1a1a; color: #ff9a9a; border: 1px solid #5a2a2a; }
+  #conflictbadge.none { color: var(--ok); }
+  #conflictbadge.on { outline: 2px solid var(--sev-confirmed); outline-offset: 1px; }
+  #conflictbadge .sp { color: var(--sev-possible); }
+  #conflictbadge .so { color: var(--sev-override); }
+  .keybtn { background: #11141b; border: 1px solid #3a4150; color: #e6e6e6;
+            border-radius: 5px; padding: 4px 9px; min-width: 92px; flex: 0 0 auto;
+            font: inherit; cursor: pointer; text-align: left; }
+  .keybtn:hover { border-color: var(--blue); }
+  .keybtn.capturing { border-color: var(--accent); background: #2a2418; color: #ffcf87; }
+  .keybtn.unbound { color: #6b7280; font-style: italic; }
+</style>
+</head>
+<body>
+<header>
+  <div class="ghcorner">
+    <a class="ghlink" href="https://github.com/Troto/HotkeyEditor" target="_blank" rel="noopener noreferrer" title="View source on GitHub" aria-label="GitHub repository">
+      <svg viewBox="0 0 16 16" width="48" height="48" fill="currentColor" aria-hidden="true"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>
+    </a>
+    <span class="ghnote">Found a bug?</span>
+    <span class="ghnote"><a href="https://github.com/Troto/HotkeyEditor/issues" target="_blank" rel="noopener noreferrer">Report it on GitHub</a></span>
+  </div>
+  <h1>Hotkey Editor -<select id="gameSelect" class="gamesel"></select><span class="backupwarn">Always keep a backup of your hotkeys.</span></h1>
+  <div class="sub" id="metaBlurb"></div>
+  <div class="bar">
+    <label class="filebtn"><span id="fileLabelText">Load files</span>
+      <input type="file" id="files">
+    </label>
+    <span class="layout-toggle" title="Convert keybinds and relabel the keyboard; set this to match the layout of the file you load">
+      <span class="lt-lbl lt-active" id="ltQ">QWERTY</span>
+      <label class="switch"><input type="checkbox" id="layoutToggle" autocomplete="off"><span class="slider"></span></label>
+      <span class="lt-lbl" id="ltD">Dvorak</span>
+    </span>
+    <input type="text" id="pname" placeholder="profile name" style="display:none">
+    <button id="save" disabled>Download profile</button>
+    <span class="helpwrap">
+      <span class="helpq" id="pathHelpBtn" title="Where your hotkey files go (click for details)">?</span>
+      <div class="helppop" id="pathHelpPop"></div>
+    </span>
+  </div>
+  <div class="bar" id="fstatus" style="margin-top:10px"></div>
+  <div class="hint" id="hint"></div>
+  <div class="sub" id="applyNote" style="margin-top:4px"></div>
+</header>
+<main>
+  <div id="kbwrap" style="display:none">
+    <div class="kbtools">
+      <label class="tg" title="Shades each keyboard key darker the more commands are bound to it, so heavily-used keys stand out."><input type="checkbox" id="shadeToggle" checked autocomplete="off"> Shade keys by # bound</label>
+      <label class="tg" id="chronWrap" style="display:none" title="Show the hidden Chronicles (Battle for Greece) commands in the list. They're kept in saved files either way."><input type="checkbox" id="chronToggle" autocomplete="off"> Show Chronicles</label>
+      <span id="conflictbadge" style="display:none"></span>
+      <label class="tg" title="Hide the conflicts panel and all conflict highlighting (key rings + row markers). The toolbar conflict count stays."><input type="checkbox" id="hideConflictsToggle" autocomplete="off"> Hide conflicts</label>
+      <label class="tg" title="Show the interaction guide (the “How it works” panel to the right of the keyboard)."><input type="checkbox" id="showInstructionsToggle" checked autocomplete="off"> Show instructions</label>
+      <span id="kbbanner"></span>
+    </div>
+    <div class="kbstage">
+      <aside class="cpanel" id="conflictpanel"></aside>
+      <div class="kb" id="kb"></div>
+      <aside class="khelp">
+        <h3>How it works</h3>
+        <div class="khsec khrow">
+          <div class="khvis"><div class="kbkey">Key</div></div>
+          <ul class="khbul">
+            <li><b>Hover</b> — highlights every command bound to it</li>
+            <li><b>Click</b> — filters the list to that key’s commands</li>
+          </ul>
+        </div>
+        <div class="khsec khrow">
+          <div class="khvis">
+            <div class="khgrpdemo"><span class="caret">&#9662;</span><span>Group</span><span class="khgrp-r"><span class="geye">👁</span><span class="pill">12</span></span></div>
+          </div>
+          <ul class="khbul">
+            <li><b>Click the name</b> — collapse / expand the group</li>
+            <li><b>Click the 👁</b> — highlight all the group’s keys</li>
+          </ul>
+        </div>
+        <div class="khsec khrow">
+          <div class="khvis">
+            <div class="cmd"><span class="nm">Command</span><button class="keybtn" tabindex="-1">Ctrl+A</button></div>
+          </div>
+          <ul class="khbul">
+            <li><b>Hover</b> — preview its key(s) on the keyboard</li>
+            <li><b>Click the name</b> — highlight the bound key</li>
+            <li><b>Click the hotkey</b> — press desired hotkey</li>
+            <li><b>Right click</b> — unbind hotkey</li>
+          </ul>
+        </div>
+        <p class="khnote"><b>Browser shortcuts:</b> keys like <b>Ctrl+N</b> are intercepted as a browser shortcut, so trying to enter it directly won't work. Instead, either tap <b>Ctrl/Shift</b> or click <b>Ctrl/Alt/Shift</b> to "arm" the modifier ready for a second input, then press the key.</p>
+      </aside>
+    </div>
+    <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button><input type="search" id="search" placeholder="filter commands…" autocomplete="off"></div>
+  </div>
+  <div class="empty" id="placeholder"></div>
+  <div id="content"></div>
+</main>
+
+<!-- Inlined data: `--build` replaces the null below with a `{ game, data }` payload
+     (game id + that game's dataset) so the page is self-contained.  Left null in source
+     so a hand-served page can fall back to fetching the json (dev mode); see loadData(). -->
+<script>window.GAME_DATA = {"game":"aoe2","data":{"strings":{"19000":"Delete Unit","19001":"Send Chat Message","19002":"Set Gather Point","19003":"Select all Military Buildings","19004":"Speed Up Game","19005":"Slow Down Game","19006":"Scroll Left","19007":"Scroll Right","19008":"Scroll Up","19009":"Scroll Down","19010":"Display Game Time","19012":"Garrison","19013":"Select all Docks","19014":"Select all Barracks","19015":"Select all Archery Ranges","19016":"Select all Stables","19017":"Select all Siege Workshops","19018":"Select all Castles","19019":"Select all Kreposts","19020":"Select all Monasteries","19021":"Select all Town Centers","19023":"Go to Next Idle Villager","19024":"Go to Last Notification","19025":"Go to Selected Object","19026":"Go to Town Center","19027":"Go to Market","19028":"Review Chat Messages Backward","19029":"Review Chat Messages Forward","19030":"Knight-line, Hei Guang Cavalry","19031":"Camel Rider","19032":"Genitour","19033":"Battle Elephant","19034":"Spearman-line","19035":"Militia-line","19036":"Delete All Selected Units","19038":"Archer-line","19040":"Cavalry Archer","19041":"Hand Cannoneer","19043":"Skirmisher","19044":"Trade Cog","19045":"Fishing Ship","19047":"Bombard Cannon, Traction Trebuchet","19048":"Siege Tower","19049":"Scorpion, War Chariot","19051":"Monk","19053":"Unique Warships","19054":"Villager","19055":"Cannon Galleon","19056":"Battering Ram","19057":"Review Event Messages Backward","19058":"Review Event Messages Forward","19059":"Galley, Galleon","19060":"Scout Cavalry, Hussar","19062":"Archery Range","19063":"Blacksmith","19064":"Barracks","19065":"Monastery","19066":"Castle","19067":"Dock","19068":"Go to Next Idle Military Unit","19069":"Petard","19070":"Eagle Warrior, Fire Lancer","19071":"Missionary, Religious Infantry","19073":"Condottiero","19074":"Reseed Farm","19075":"Feitoria","19076":"Select all Land/Naval Military Units","19077":"Select all Idle Villagers","19078":"Select all Visible Land/Naval Military Units","19079":"Select all Idle Trade Carts/Cogs","19080":"Tech: Elite Unique Unit","19081":"Tech: Unique Castle Technology","19082":"Tech: Unique Imperial Technology","19083":"Tech: Hoardings","19084":"Tech: Sappers","19085":"Tech: Conscription","19086":"Tech: Spies/Treason","19087":"Zoom In","19088":"Zoom Out","19089":"Zoom In","19090":"Zoom Out","19091":"Toggle Visual Grid","19099":"Ungroup Control Group","19100":"Toggle Automatic Farm Reseeding","19101":"Toggle Automatic Fish Trap Rebuilding","19102":"Sell 100 Food","19103":"Sell 100 Wood","19104":"Sell 100 Stone","19111":"Buy 100 Food","19112":"Buy 100 Wood","19113":"Buy 100 Stone","19120":"Reset Zoom","19121":"Remove Gather Point","19122":"Lock/Unlock Gate","19123":"Rebuild Fish Trap","19124":"Tarkan","19125":"Infantry Unique Units","19126":"Slinger, Grenadier","19127":"Steppe Lancer","19128":"Click-Drag Scroll","19129":"Toggle Health Bar","19130":"Elite Kipchak (Mercenary)","19131":"Select all Markets","19132":"Select all Blacksmiths","19133":"Select all Universities","19134":"Flaming Camel, Mounted Trebuchet","19135":"Go to King","19136":"Go to Donjon","19137":"Select all Donjons","19138":"Donjon","19139":"Select all Trade Carts/Cogs","19140":"Select all Idle Land/Naval Military Units","19141":"Flemish Militia","19142":"Tech: Houfnice","19143":"Xolotl Warrior","19144":"Change Mode","19145":"Elephant Archer","19146":"Armored Elephant","19147":"Shrivamsha Rider","19148":"Caravanserai","19149":"Tech: Elite Bolas Rider","19150":"Tech: Siege Elephant","19151":"Tech: Elite Shrivamsha Rider","19152":"Tech: Elite Battle Elephant","19153":"Toggle Idle Pointers","19154":"Dromon, Lou Chuan","19155":"Select all Mills","19156":"Select all Mining Camps","19157":"Select all Lumber Camps","19158":"Mule Cart","19159":"Select all Mule Carts","19161":"Set Gather Point on Self","19162":"Change Mode (2)","19163":"Settlement","19164":"Select all Settlements","19165":"Go to Settlement","19166":"Tech: Elite Ibirapema, Temple Guard","19167":"Spearman-line","19168":"Spearman-line","19169":"Tech: Farm, Pasture Upgrades","19170":"Tech: Gold Upgrades","19171":"Tech: Gold Upgrades","19172":"Tech: Stone Upgrades","19173":"Tech: Stone Upgrades","19174":"Tech: Wood Upgrades","19175":"Tech: Wood Upgrades","19179":"Skirmisher","19181":"Tech: Conscription","19182":"Tech: Spies/Treason","19183":"Toggle Automatic Fish Trap Rebuilding","19184":"Rebuild Fish Trap","19185":"Elite Kipchak (Mercenary)","19186":"Cancel","19187":"Unique Unit","19188":"Tech: Pikeman, Halberdier","19189":"Tech: Elite, Imperial Skirmisher","19190":"Trade 0% Wood","19191":"Trade 50% Wood","19192":"Trade 100% Wood","19200":"Farm, Pasture","19201":"Tower","19202":"Fish Trap","19203":"Outpost","19204":"Bombard Tower","19205":"Siege Workshop","19206":"Stable","19208":"University","19209":"Wonder","19210":"Palisade Wall","19211":"Stone Wall","19212":"Palisade Gate","19213":"House","19214":"Economic Buildings","19215":"Military Buildings","19216":"Stop","19217":"More Items","19220":"Attack Ground","19221":"Heal","19222":"Convert","19224":"Repair","19225":"Unload","19233":"Drop Relic","19234":"Special Ability","19235":"Flare","19236":"Mill","19237":"Market","19238":"Town Center","19239":"Unselect","19240":"Cancel","19241":"Pack","19242":"Unpack","19243":"More Buildings","19244":"Create Group #1","19245":"Create Group #2","19246":"Create Group #3","19247":"Create Group #4","19248":"Create Group #5","19249":"Create Group #6","19250":"Create Group #7","19251":"Create Group #8","19252":"Create Group #9","19254":"Select Group #1","19255":"Select Group #2","19256":"Select Group #3","19257":"Select Group #4","19258":"Select Group #5","19259":"Select Group #6","19260":"Select Group #7","19261":"Select Group #8","19262":"Select Group #9","19263":"Unload (Siege)","19264":"Gate","19268":"Display Statistics","19269":"Go to Barracks","19270":"Go to Archery Range","19271":"Go to Stable","19272":"Go to Siege Workshop","19273":"Go to Dock","19274":"Go to Monastery","19275":"Go to Blacksmith","19276":"Go to Mill","19277":"Go to University","19279":"Fire Ship","19280":"Demolition Ship","19281":"Display Options Screen","19282":"Display Technology Tree","19283":"Lumber Camp","19284":"Transport Ship","19285":"Mangonel, Onager, Rocket Cart","19286":"Trade Cart","19288":"Mining Camp","19290":"Go to Castle","19291":"Go to Mining Camp","19292":"Go to Lumber Camp","19293":"Mini-map Combat Mode","19294":"Mini-map Economic Mode","19295":"Mini-map Normal Mode","19298":"Diplomacy","19299":"Menu","19300":"Objectives","19301":"Chat Dialog","19303":"Box","19304":"Line","19305":"Staggered","19306":"Flank","19312":"Patrol","19313":"Guard","19314":"Follow","19315":"Aggressive","19316":"Defensive","19317":"Stand Ground","19318":"No Attack","19319":"Ring Town Bell","19321":"Trebuchet, Heroes","19322":"Unique Unit","19323":"Pause Game","19324":"Go Back to Work","19325":"Save Game","19326":"Return to Previous View","19327":"Toggle Friend or Foe Colors","19328":"Save Chapter","19329":"Krepost","19330":"Go to Krepost","19331":"Rotate Gate Clockwise","19332":"Rotate Gate Counterclockwise","19333":"Tech: Loom","19334":"Tech: Wheelbarrow, Hand Cart","19335":"Tech: Town Watch, Town Patrol","19336":"Tech: Age Up","19337":"Tech: Farm, Pasture Upgrades","19338":"Tech: Gold Upgrades","19339":"Tech: Stone Upgrades","19340":"Tech: Wood Upgrades","19341":"Tech: Fishing Lines, Gillnets","19342":"Tech: Careening, Dry Dock","19343":"Tech: Shipwright","19344":"Tech: War Galley, Galleon","19345":"Tech: Heavy Demolition Ship","19347":"Tech: Elite Cannon Galleon","19348":"Tech: Caravan","19349":"Tech: Coinage, Banking","19350":"Auto Scout","19352":"Build","19354":"Go to Mule Cart","19355":"Hulk","19356":"Tech: Clinker Construction, Carvel Hull","19357":"Tech: Siphons, Incendiaries","19358":"Thirisadai","19450":"Tech: Guilds","19451":"Tech: Swordsmen, Champi Upgrades","19452":"Tech: Pikeman, Halberdier","19453":"Tech: Eagle Warrior, Fire Lancer, Hoplite","19454":"Tech: Gambesons","19455":"Tech: Squires","19456":"Tech: Arson","19457":"Tech: Elite Unique Ship","19458":"Tech: Crossbowman, Arbalester","19459":"Tech: Elite, Imperial Skirmisher","19460":"Tech: Heavy Cavalry Archer, Elite Elephant Archer","19461":"Tech: Thumb Ring","19462":"Tech: Parthian Tactics","19463":"Tech: Elite Genitour","19464":"Tech: Light Cavalry, Hussar","19465":"Tech: Knight-line, Hei Guang Cavalry","19466":"Tech: Heavy, Imperial Camel Rider","19467":"Tech: Elite Steppe Lancer","19468":"Tech: Bloodlines","19469":"Tech: Husbandry","19470":"Tech: Melee Attack Upgrades","19471":"Tech: Infantry Armor Upgrades","19472":"Tech: Cavalry Armor Upgrades","19473":"Tech: Arrow Attack Upgrades","19474":"Tech: Archer Armor Upgrades","19475":"Tech: Capped, Siege Ram","19476":"Tech: (Siege) Onager, Heavy Rocket Cart","19477":"Tech: Heavy Scorpion","19478":"Tech: Redemption","19479":"Tech: Atonement","19480":"Tech: Fervor","19481":"Tech: Sanctity","19482":"Tech: Devotion, Faith","19483":"Tech: Illumination","19484":"Tech: Block Printing","19485":"Tech: Heresy","19486":"Tech: Theocracy","19487":"Tech: Herbal Medicine","19488":"Tech: Masonry, Architecture","19489":"Tech: Treadmill Crane","19490":"Tech: Heated Shot","19491":"Tech: Ballistics","19492":"Tech: Chemistry, Bombard Tower","19493":"Tech: Siege Engineers","19494":"Tech: Arrowslits","19495":"Tech: Murder Holes","19496":"Tech: Tower Upgrades","19497":"Tech: Fortified Wall","19743":"Go Back to Work (Fortified Church, Dock)","20000":"Unit Commands","20001":"Game Commands","20002":"Scroll Commands","20003":"Villager Build","20004":"Town Center","20006":"Blacksmith","20007":"Dock","20008":"Barracks","20009":"Archery Range","20010":"Stable","20011":"Siege Workshop","20012":"Monastery","20013":"Market","20014":"Military Units","20015":"Castle","20016":"Mule Cart","20017":"Mill","20018":"Cycle Commands","20019":"Group Commands","20020":"Mining Camp","20021":"Lumber Camp","20022":"Zoom Commands","20023":"Gate Commands","20024":"Donjon","20030":"Spectator/Replay Commands","20031":"Replay Speed Up","20032":"Replay Speed Down","20033":"Set Speed to Slow","20034":"Set Speed to Default","20035":"Set Speed to Fast","20036":"Set Speed to Extra Fast","20037":"Watch Gaia","20038":"Watch Player One","20039":"Watch Player Two","20040":"Watch Player Three","20041":"Watch Player Four","20042":"Watch Player Five","20043":"Watch Player Six","20044":"Watch Player Seven","20045":"Watch Player Eight","20208":"Ungarrison","181037":"Create Group #10","181038":"Create Group #11","181039":"Create Group #12","181040":"Create Group #13","181041":"Create Group #14","181042":"Create Group #15","181043":"Create Group #16","181044":"Create Group #17","181045":"Create Group #18","181046":"Create Group #19","181047":"Create Group #20","181048":"Select Group #10","181049":"Select Group #11","181050":"Select Group #12","181051":"Select Group #13","181052":"Select Group #14","181053":"Select Group #15","181054":"Select Group #16","181055":"Select Group #17","181056":"Select Group #18","181057":"Select Group #19","181058":"Select Group #20","181059":"Select & Center Group #1","181060":"Select & Center Group #2","181061":"Select & Center Group #3","181062":"Select & Center Group #4","181063":"Select & Center Group #5","181064":"Select & Center Group #6","181065":"Select & Center Group #7","181066":"Select & Center Group #8","181067":"Select & Center Group #9","181068":"Select & Center Group #10","181069":"Select & Center Group #11","181070":"Select & Center Group #12","181071":"Select & Center Group #13","181072":"Select & Center Group #14","181073":"Select & Center Group #15","181074":"Select & Center Group #16","181075":"Select & Center Group #17","181076":"Select & Center Group #18","181077":"Select & Center Group #19","181078":"Select & Center Group #20","181079":"Append Group #1","181080":"Append Group #2","181081":"Append Group #3","181082":"Append Group #4","181083":"Append Group #5","181084":"Append Group #6","181085":"Append Group #7","181086":"Append Group #8","181087":"Append Group #9","181088":"Append Group #10","181089":"Append Group #11","181090":"Append Group #12","181091":"Append Group #13","181092":"Append Group #14","181093":"Append Group #15","181094":"Append Group #16","181095":"Append Group #17","181096":"Append Group #18","181097":"Append Group #19","181098":"Append Group #20","200008":"Attack Move","300409":"Toggle Extended Tooltips","400017":"Seek Shelter","400018":"All Back to Work","400021":"Drop Off Resources","405065":"Fort","419001":"Hoplite","419003":"War Chariot","419004":"Tech: Elite War Chariot","419005":"Tech: First Unique Classical Technology","419006":"Tech: First Unique Imperial Technology","419007":"Port","419008":"Shipyard","419009":"Select all Ports","419010":"Select all Shipyards","419011":"Fishing Ship","419012":"Merchant Ship","419013":"Transport Ship","419014":"Lembos","419015":"Tech: (War, Heavy, Elite) Lembos","419016":"Tech: Scoop Nets","419017":"Tech: Drums","419018":"Tech: Shipwright","419019":"Monoreme","419020":"Galley","419021":"Incendiary Raft","419023":"Catapult Ship","419024":"Leviathan","419025":"Tech: Bireme, Trireme","419026":"Tech: (Heavy, Elite) Galley","419027":"Tech: (Heavy) Incendiary Ship","419029":"Tech: Onager Ship","419030":"Tech: Hypozomata","419031":"Go to Port","419032":"Go to Shipyard","419033":"Polemarch","419038":"Tech: Battle Drills","419040":"Select all Polemarchs (Spartans)","419041":"Go to Polemarch (Spartans)","419042":"Tech: Economic Town Center","419043":"Tech: Military Town Center","419044":"Tech: Defensive Town Center","419045":"Tech: Economic Policy","419046":"Tech: Naval Policy","419047":"Tech: Military Policy","419048":"Tech: Skeuophoroi, Hippagretai","419050":"Tech: Ephorate","419051":"Tech: Morai","419057":"Toggle Trading Ratio","419058":"Tech: Second Unique Classical Technology","419059":"Tech: Second Unique Imperial Technology","419066":"Select all Land Hero Units","419067":"Select all Non-Combatant Hero Units","419068":"Select all Naval Hero Units","419069":"Go to Next Land Hero Unit","419070":"Go to Next Non-Combatant Hero Unit","419071":"Go to Next Naval Hero Unit","419072":"Campaign: Battle for Greece","419073":"Bodyguard","419074":"Lysander's Raider","419075":"Mercenary Hoplite","419076":"Lancer (Army Tent)","419077":"Laminated Bowman (Army Tent)","419078":"Strategos (Army Tent)","419079":"Gastraphetoros (Army Tent)","419080":"Priestess (Army Tent)","419081":"Swordsman (Army Tent)","419082":"Bodyguard (Army Tent)","419083":"Emissary","419084":"Prayer to Apollo","419085":"Prayer to Ares","419086":"Prayer to Artemis","419087":"Prayer to Hephaestus","419088":"Trigger Ambush","419089":"Hippeus (Army Tent)","419090":"Tech: Elite Strategos (Army Tent)","419091":"Tech: Elite Hippeus (Army Tent)","419092":"Immortal (Army Tent)","419093":"War Chariot (Army Tent)","419094":"Palintonon (Army Tent)","419095":"Tech: Cavalry Aura Upgrade","419096":"Tech: Infantry Aura Upgrade","419097":"Tech: Archer Aura Upgrade","419098":"Tech: Hipparchs","419099":"Tech: War Dances","419100":"Tech: Forced Levies","419101":"Tech: Harmosts","419102":"Tech: Hippotoxotai","419103":"Tech: Othismos","419104":"Tech: Double Wine Rations","419105":"Tech: Thessalian Warhorses","419106":"Tech: Reinforced Prow","419107":"Tech: Paean","419108":"Tech: Black Broth","419109":"Tech: Lysander's Furor","419110":"Tech: Careful Captains, Belligerent Captains","419111":"Tech: Sea Shanties, Hymns to Poseidon","419112":"Tech: Strengthened Hulls, Oakum","419113":"Tech: Marines, Hardened Marines","419114":"Tech: Artillery Spotters","419115":"Tech: Themistocles' Masterplan","419116":"Low Tribute","419117":"Medium Tribute","419118":"High Tribute","419119":"Tech: Sell Estate","419120":"Tech: Repair Acropolis","419121":"Tech: Sell Athena's Gold","419122":"Embassy to the Oracle","419123":"Raid the Peloponnese","419124":"Tech: Colonize Aegina","419125":"Host Festival","419126":"Tech: Prosecute Cleon","419127":"Bribe Rioters","419128":"Tech: Burn Plague Bodies","419129":"Tech: Funeral Ovation","419130":"Tech: Agoge (Army Tent)","419131":"Tech: Othismos (Army Tent)","419132":"Select all Wonders and Monuments","419133":"Go to Wonder or Monument","419134":"Select all Outposts","419135":"Go to Outpost","419136":"Outpost","419137":"Tech: Fortified Outpost","419138":"Tech: Defensive Emplacement","419139":"Tech: Offensive Emplacement","419140":"Cycle Recruitment Doctrine (Barracks)","419141":"Cycle Recruitment Doctrine (Archery Range)","419142":"Cycle Recruitment Doctrine (Stable)","419143":"Campaign: Alexander the Great","419144":"Macedonian Command Post (Campaign Only)","419145":"Go to Macedonian Command Post (Campaign Only)","419146":"Select all Macedonian Command Posts (Campaign Only)","419147":"Alexander's Army: Rhomphaia Warrior/Peltast","419148":"Alexander's Army: Ekdromos/Strategos","419149":"Alexander's Army: Kotthybos/Telamon","419150":"Alexander's Army: Slinger/Mercenary Archer","419151":"Alexander's Army: Axe Cavalry/Axeman","419152":"Alexander's Army: Kopis/Sarissa","419153":"Alexander's Army: Immortal/War Chariot","419154":"Alexander's Army: Skirmisher Cavalry/Heavy Cavalry","419155":"Alexander's Army: Sannāhya/Longbowman","419156":"Alexander's Army: Eastern Archer/Sickle Warrior","419157":"Helepolis (Campaign Only)","419158":"Scenario 04: Ceasefire","419159":"Scenario 04: Assassinate Dissenting Noble","419160":"Scenario 04: Emergency Conscription","419161":"Scenario 04: Emergency Requisition","419162":"Scenario 04: Diplomatic Gift","419163":"Scenario 02: Sell Plunder Cart","419164":"Scenario 11: Brace Parmenion","419165":"Scenario 07: Royal Companions","419166":"Scenario 07: Phalangites","419167":"Scenario 07: Rhomphaia Warriors/Peltasts","419168":"Scenario 07: Swordsmen","419169":"Scenario 07: Guardsmen","419170":"Scenario 07: Laminated Bowmen","419171":"Scenario 07: Elite Skirmishers","419172":"Scenario 02: Villager","419173":"Scenario 02: Companion Cavalry","419174":"Scenario 02: Mule Cart","419175":"Scenario 02: Battering Ram","419176":"Scenario 16: Villager","419177":"Scenario 08: Sappers","419178":"Scenario 08: Siege Rams","419179":"Scenario 08: Palintonon Emplacements","419180":"Scenario 08: Bribery","419181":"Scenario 08: Pontoon Bridge","419182":"Scenario 11: Wounded Cavalry","419183":"Scenario 11: Heal Units","419184":"Scenario 11: Agrianian Reserves","419185":"Scenario 11: Fortify Perdiccas","419186":"Scenario 11: Parmenion Reserves","419187":"Scenario 11: Baggage Handlers","419188":"Scenario 11: Offensive Tactics","419189":"Scenario 11: Greek Mercenaries","419190":"Scenario 11: Perdiccas Reserves","419191":"Scenario 11: Supplies to Parmenion","419192":"Scenario 12: Mill District","419193":"Scenario 12: Market District","419194":"Scenario 12: Infantry District","419195":"Scenario 12: Western Fortification District","419196":"Scenario 12: Garden District","419197":"Scenario 12: Lumber District","419198":"Scenario 12: Blacksmith District","419199":"Scenario 12: Archery District","419200":"Scenario 12: Northern Fortification District","419201":"Scenario 12: Theatre District","419202":"Scenario 12: Mining District","419203":"Scenario 12: Temple District","419204":"Scenario 12: Cavalry District","419205":"Scenario 12: Eastern Fortification District","419206":"Scenario 16: Transport Ship","419207":"Scenario 16: Phalangite","419208":"Scenario 16: Guardsman","419209":"Scenario 16: Laminated Bowman","419210":"Scenario 16: Elite Skirmisher","419211":"Scenario 16: Bireme","419212":"Scenario 16: War Galley","419213":"Scenario 16: Incendiary Ship","419214":"Scenario 16: Heavy Lembos","419215":"Scenario 17: Set Sail","419216":"Phalangite","419217":"Tech: Elite Phalangite","419218":"Sannāhya","419219":"Tech: Elite Sannāhya","419220":"Mercenary Hoplite (Barracks)","419221":"Scythian Horse Archer (Archery Range)","419222":"Tech: Elite Scythian Horse Archer (Archery Range)","419223":"Scenario 11: Wounded Infantry","419224":"Scenario 11: Defensive Tactics","419225":"Scenario 11: Phoenician Reserves","419226":"Scenario 11: Supplies to Perdiccas","419227":"Scenario 12: Sogdian Infantry","419228":"Scenario 12: Sogdian Archers","419229":"Scenario 12: Sogdian Cavalry","419230":"Scenario 13: Hire Infantry","419231":"Scenario 13: Hire Archers","419232":"Scenario 13: Hire Cavalry"},"civ":{"civCount":53,"idToCivs":{"19030":["Armenians","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Huns","Italians","Japanese","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings"],"19031":["Berbers","Byzantines","Cumans","Ethiopians","Gurjaras","Hindustanis","Khitans","Malians","Mongols","Persians","Saracens","Tatars","Turks"],"19032":["Berbers"],"19033":["Bengalis","Burmese","Dravidians","Khmer","Malay","Vietnamese"],"19034":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19035":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"19038":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19040":["Armenians","Berbers","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wu"],"19041":["Berbers","Bohemians","Burgundians","Byzantines","Dravidians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Italians","Japanese","Khmer","Koreans","Lithuanians","Malians","Persians","Portuguese","Saracens","Spanish","Tatars","Teutons","Turks"],"19043":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19044":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19045":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19047":["Berbers","Bohemians","Burgundians","Burmese","Byzantines","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Italians","Jurchens","Koreans","Lithuanians","Malay","Malians","Persians","Poles","Portuguese","Saracens","Spanish","Teutons","Turks","Vietnamese"],"19048":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19049":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19051":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19054":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19055":["Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Celts","Dravidians","Ethiopians","Franks","Georgians","Gurjaras","Hindustanis","Italians","Japanese","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Saracens","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings"],"19056":["Armenians","Aztecs","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19059":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19060":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"19062":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19063":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19064":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19065":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19066":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19067":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19069":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19070":["Aztecs","Maya"],"19071":["Spanish"],"19073":["Italians"],"19075":["Portuguese"],"19083":["Armenians","Berbers","Britons","Burgundians","Byzantines","Celts","Cumans","Dravidians","Franks","Georgians","Gurjaras","Hindustanis","Inca","Italians","Japanese","Jurchens","Khmer","Lithuanians","Magyars","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Saracens","Shu","Sicilians","Slavs","Spanish","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei"],"19084":["Armenians","Aztecs","Bohemians","Britons","Bulgarians","Burgundians","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Huns","Inca","Jurchens","Khmer","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings"],"19085":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19086":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19124":["Huns"],"19126":["Inca","Mapuche","Muisca","Tupi"],"19127":["Cumans","Jurchens","Khitans","Mongols","Tatars"],"19134":["Tatars"],"19138":["Sicilians"],"19141":["Burgundians"],"19142":["Bohemians"],"19145":["Bengalis","Dravidians","Gurjaras"],"19146":["Bengalis","Dravidians","Gurjaras","Hindustanis"],"19147":["Gurjaras"],"19148":["Hindustanis","Persians"],"19149":["Mapuche"],"19150":["Bengalis","Dravidians","Gurjaras","Hindustanis"],"19151":["Gurjaras"],"19152":["Bengalis","Burmese","Khmer","Malay","Vietnamese"],"19154":["Armenians","Byzantines","Goths","Huns","Romans"],"19158":["Armenians","Georgians"],"19163":["Inca","Mapuche","Muisca","Tupi"],"19167":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19168":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19169":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19179":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19181":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19182":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19188":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Vietnamese","Vikings","Wei","Wu"],"19200":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19202":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19203":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19204":["Armenians","Bohemians","Burgundians","Byzantines","Chinese","Dravidians","Italians","Koreans","Lithuanians","Malay","Mapuche","Poles","Portuguese","Spanish","Tatars","Teutons","Turks","Vietnamese"],"19205":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19206":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"19208":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19209":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19210":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19211":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Dravidians","Ethiopians","Franks","Georgians","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19212":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19213":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19236":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"19237":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19238":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19264":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Dravidians","Ethiopians","Franks","Georgians","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19279":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19280":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Wei","Wu"],"19283":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"19284":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19285":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Khmer","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19286":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19288":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"19329":["Bulgarians"],"19333":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19334":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19335":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19337":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19341":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19342":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19343":["Aztecs","Bengalis","Berbers","Britons","Byzantines","Celts","Chinese","Dravidians","Ethiopians","Goths","Gurjaras","Inca","Italians","Japanese","Koreans","Magyars","Malay","Maya","Mongols","Romans","Shu","Sicilians","Spanish","Turks"],"19344":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19345":["Armenians","Berbers","Britons","Byzantines","Celts","Chinese","Dravidians","Franks","Goths","Gurjaras","Huns","Jurchens","Malians","Maya","Mongols","Muisca","Persians","Saracens","Shu","Sicilians","Spanish","Teutons","Turks","Vietnamese","Wu"],"19347":["Bengalis","Berbers","Bohemians","Burgundians","Burmese","Dravidians","Hindustanis","Italians","Japanese","Khmer","Koreans","Lithuanians","Malay","Persians","Portuguese","Saracens","Spanish","Tatars","Turks","Vietnamese","Vikings"],"19348":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19349":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19355":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19356":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19357":["Armenians","Bengalis","Berbers","Bohemians","Britons","Burgundians","Byzantines","Chinese","Dravidians","Franks","Goths","Italians","Jurchens","Khitans","Khmer","Koreans","Malay","Mapuche","Mongols","Persians","Portuguese","Saracens","Sicilians","Spanish","Teutons","Turks","Vikings","Wu"],"19358":["Dravidians"],"19450":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Cumans","Dravidians","Ethiopians","Georgians","Goths","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Koreans","Lithuanians","Malians","Maya","Muisca","Persians","Portuguese","Romans","Shu","Sicilians","Spanish","Tatars","Teutons","Turks","Vietnamese","Wu"],"19452":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Vietnamese","Vikings","Wei","Wu"],"19453":["Aztecs","Maya"],"19454":["Armenians","Aztecs","Bengalis","Britons","Bulgarians","Burmese","Byzantines","Celts","Dravidians","Franks","Georgians","Japanese","Jurchens","Khitans","Koreans","Persians","Portuguese","Saracens","Shu","Sicilians","Slavs","Spanish","Teutons","Vikings"],"19455":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Koreans","Lithuanians","Malay","Malians","Maya","Mongols","Muisca","Persians","Poles","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19456":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Persians","Poles","Portuguese","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19458":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19460":["Berbers","Britons","Bulgarians","Burmese","Byzantines","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Hindustanis","Huns","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malians","Mongols","Persians","Poles","Romans","Saracens","Shu","Slavs","Spanish","Tatars","Turks","Vietnamese"],"19461":["Berbers","Bulgarians","Byzantines","Chinese","Cumans","Dravidians","Ethiopians","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Khitans","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Saracens","Shu","Spanish","Tatars","Turks","Vietnamese","Wei"],"19462":["Bulgarians","Burmese","Cumans","Georgians","Huns","Japanese","Khitans","Khmer","Magyars","Mongols","Persians","Saracens","Tatars","Turks","Wei"],"19463":["Berbers"],"19464":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Turks","Vietnamese","Vikings","Wei","Wu"],"19465":["Armenians","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Huns","Italians","Japanese","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings"],"19467":["Cumans","Jurchens","Khitans","Mongols","Tatars"],"19468":["Armenians","Bengalis","Berbers","Bulgarians","Burmese","Chinese","Cumans","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khmer","Lithuanians","Magyars","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Wei","Wu"],"19469":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Turks","Vietnamese","Wei","Wu"],"19477":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burmese","Celts","Chinese","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Inca","Japanese","Jurchens","Khmer","Magyars","Malay","Mapuche","Maya","Mongols","Muisca","Persians","Romans","Sicilians","Slavs","Tatars","Teutons","Tupi","Turks","Vikings","Wei","Wu"],"19478":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Bulgarians","Burgundians","Burmese","Byzantines","Georgians","Gurjaras","Hindustanis","Inca","Italians","Japanese","Khmer","Lithuanians","Malay","Malians","Muisca","Poles","Portuguese","Romans","Saracens","Slavs","Spanish","Teutons","Tupi","Turks","Wu"],"19479":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Burgundians","Burmese","Byzantines","Chinese","Cumans","Dravidians","Ethiopians","Gurjaras","Huns","Italians","Japanese","Jurchens","Khitans","Lithuanians","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Portuguese","Romans","Saracens","Shu","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wu"],"19480":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malians","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Spanish","Tatars","Teutons","Turks","Vikings","Wei","Wu"],"19481":["Armenians","Aztecs","Bengalis","Bohemians","Britons","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Muisca","Poles","Portuguese","Saracens","Sicilians","Slavs","Spanish","Teutons","Tupi","Turks","Vietnamese","Wei","Wu"],"19482":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19483":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Chinese","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Lithuanians","Magyars","Malay","Muisca","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Vietnamese","Wei","Wu"],"19484":["Armenians","Aztecs","Bengalis","Bohemians","Britons","Burgundians","Burmese","Byzantines","Chinese","Dravidians","Franks","Georgians","Hindustanis","Inca","Italians","Japanese","Jurchens","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Slavs","Spanish","Tatars","Teutons","Vietnamese","Vikings","Wei"],"19485":["Armenians","Aztecs","Berbers","Bohemians","Bulgarians","Byzantines","Celts","Cumans","Ethiopians","Franks","Georgians","Gurjaras","Huns","Inca","Khitans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Portuguese","Saracens","Shu","Spanish","Teutons","Tupi","Turks","Vikings"],"19486":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burmese","Byzantines","Chinese","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malians","Mapuche","Maya","Muisca","Persians","Poles","Portuguese","Saracens","Shu","Slavs","Spanish","Teutons","Tupi","Turks","Vietnamese","Wei","Wu"],"19487":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Inca","Italians","Japanese","Jurchens","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Vietnamese","Wu"],"19488":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vikings","Wei","Wu"],"19489":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Burgundians","Burmese","Byzantines","Celts","Georgians","Gurjaras","Inca","Italians","Japanese","Jurchens","Khitans","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Muisca","Poles","Portuguese","Saracens","Tatars","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19490":["Armenians","Aztecs","Bengalis","Berbers","Britons","Bulgarians","Burmese","Celts","Chinese","Cumans","Dravidians","Ethiopians","Goths","Gurjaras","Inca","Italians","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Persians","Portuguese","Shu","Sicilians","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19491":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19492":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19493":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burmese","Celts","Ethiopians","Franks","Georgians","Hindustanis","Inca","Japanese","Jurchens","Khitans","Khmer","Koreans","Magyars","Malay","Mapuche","Mongols","Muisca","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Tatars","Teutons","Vietnamese","Vikings"],"19494":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Burgundians","Byzantines","Celts","Chinese","Dravidians","Franks","Georgians","Inca","Italians","Japanese","Jurchens","Koreans","Mapuche","Poles","Saracens","Shu","Sicilians","Spanish","Teutons","Tupi","Turks","Vietnamese","Vikings"],"19495":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"19497":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Burgundians","Burmese","Byzantines","Celts","Chinese","Dravidians","Ethiopians","Franks","Georgians","Gurjaras","Hindustanis","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Malians","Maya","Mongols","Poles","Portuguese","Romans","Saracens","Shu","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei"],"20004":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20006":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20007":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20008":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20009":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20010":["Armenians","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"20011":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20012":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20013":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20015":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"20016":["Armenians","Georgians"],"20017":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"20020":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"20021":["Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Goths","Gurjaras","Hindustanis","Huns","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Maya","Mongols","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Turks","Vietnamese","Vikings","Wei","Wu"],"20024":["Sicilians"],"419003":["Shu"],"419011":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"419013":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"419018":["Aztecs","Bengalis","Berbers","Britons","Byzantines","Celts","Chinese","Dravidians","Ethiopians","Goths","Gurjaras","Inca","Italians","Japanese","Koreans","Magyars","Malay","Maya","Mongols","Romans","Shu","Sicilians","Spanish","Turks"],"419020":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"],"419136":["Armenians","Aztecs","Bengalis","Berbers","Bohemians","Britons","Bulgarians","Burgundians","Burmese","Byzantines","Celts","Chinese","Cumans","Dravidians","Ethiopians","Franks","Georgians","Goths","Gurjaras","Hindustanis","Huns","Inca","Italians","Japanese","Jurchens","Khitans","Khmer","Koreans","Lithuanians","Magyars","Malay","Malians","Mapuche","Maya","Mongols","Muisca","Persians","Poles","Portuguese","Romans","Saracens","Shu","Sicilians","Slavs","Spanish","Tatars","Teutons","Tupi","Turks","Vietnamese","Vikings","Wei","Wu"]},"units":[19030,19031,19032,19033,19034,19035,19038,19040,19041,19043,19044,19045,19047,19048,19049,19051,19054,19055,19056,19059,19060,19069,19070,19071,19073,19124,19126,19127,19134,19141,19142,19145,19146,19147,19149,19150,19151,19152,19154,19167,19168,19179,19188,19279,19280,19284,19285,19286,19344,19345,19347,19355,19358,19452,19453,19458,19460,19463,19464,19465,19467,19477,419003,419011,419013,419020]},"card":{"byId":{"19000":["Unit Commands","U:any"],"19036":["Unit Commands","U:any"],"19001":["Game Commands","G"],"19004":["Game Commands","G"],"19005":["Game Commands","G"],"19028":["Game Commands","G"],"19029":["Game Commands","G"],"19057":["Game Commands","G"],"19058":["Game Commands","G"],"19268":["Game Commands","G"],"19282":["Game Commands","G"],"19281":["Game Commands","G"],"300409":["Game Commands","G"],"19010":["Game Commands","G"],"19235":["Game Commands","G"],"19293":["Game Commands","G"],"19294":["Game Commands","G"],"19295":["Game Commands","G"],"19298":["Game Commands","G"],"19299":["Game Commands","G"],"19300":["Game Commands","G"],"19301":["Game Commands","G"],"19323":["Game Commands","G"],"19325":["Game Commands","G"],"19327":["Game Commands","G"],"19326":["Game Commands","G"],"19328":["Game Commands","G"],"19076":["Game Commands","G"],"19077":["Game Commands","G"],"19078":["Game Commands","G"],"19079":["Game Commands","G"],"19091":["Game Commands","G"],"19129":["Game Commands","G"],"19153":["Game Commands","G"],"19139":["Game Commands","G"],"19140":["Game Commands","G"],"19239":["Game Commands","G"],"19240":["Game Commands","G"],"419066":["Game Commands","G"],"419067":["Game Commands","G"],"419068":["Game Commands","G"],"19023":["Go-To Commands","G"],"19024":["Go-To Commands","G"],"19068":["Go-To Commands","G"],"19025":["Go-To Commands","G"],"19135":["Go-To Commands","G"],"419069":["Go-To Commands","G"],"419070":["Go-To Commands","G"],"419071":["Go-To Commands","G"],"19244":["Control Groups 1-10","G"],"19245":["Control Groups 1-10","G"],"19246":["Control Groups 1-10","G"],"19247":["Control Groups 1-10","G"],"19248":["Control Groups 1-10","G"],"19249":["Control Groups 1-10","G"],"19250":["Control Groups 1-10","G"],"19251":["Control Groups 1-10","G"],"19252":["Control Groups 1-10","G"],"181037":["Control Groups 1-10","G"],"181038":["Control Groups 11-20","G"],"181039":["Control Groups 11-20","G"],"181040":["Control Groups 11-20","G"],"181041":["Control Groups 11-20","G"],"181042":["Control Groups 11-20","G"],"181043":["Control Groups 11-20","G"],"181044":["Control Groups 11-20","G"],"181045":["Control Groups 11-20","G"],"181046":["Control Groups 11-20","G"],"181047":["Control Groups 11-20","G"],"19254":["Control Groups 1-10","G"],"19255":["Control Groups 1-10","G"],"19256":["Control Groups 1-10","G"],"19257":["Control Groups 1-10","G"],"19258":["Control Groups 1-10","G"],"19259":["Control Groups 1-10","G"],"19260":["Control Groups 1-10","G"],"19261":["Control Groups 1-10","G"],"19262":["Control Groups 1-10","G"],"181048":["Control Groups 1-10","G"],"181049":["Control Groups 11-20","G"],"181050":["Control Groups 11-20","G"],"181051":["Control Groups 11-20","G"],"181052":["Control Groups 11-20","G"],"181053":["Control Groups 11-20","G"],"181054":["Control Groups 11-20","G"],"181055":["Control Groups 11-20","G"],"181056":["Control Groups 11-20","G"],"181057":["Control Groups 11-20","G"],"181058":["Control Groups 11-20","G"],"181059":["Control Groups 1-10","G"],"181060":["Control Groups 1-10","G"],"181061":["Control Groups 1-10","G"],"181062":["Control Groups 1-10","G"],"181063":["Control Groups 1-10","G"],"181064":["Control Groups 1-10","G"],"181065":["Control Groups 1-10","G"],"181066":["Control Groups 1-10","G"],"181067":["Control Groups 1-10","G"],"181068":["Control Groups 1-10","G"],"181069":["Control Groups 11-20","G"],"181070":["Control Groups 11-20","G"],"181071":["Control Groups 11-20","G"],"181072":["Control Groups 11-20","G"],"181073":["Control Groups 11-20","G"],"181074":["Control Groups 11-20","G"],"181075":["Control Groups 11-20","G"],"181076":["Control Groups 11-20","G"],"181077":["Control Groups 11-20","G"],"181078":["Control Groups 11-20","G"],"181079":["Control Groups 1-10","G"],"181080":["Control Groups 1-10","G"],"181081":["Control Groups 1-10","G"],"181082":["Control Groups 1-10","G"],"181083":["Control Groups 1-10","G"],"181084":["Control Groups 1-10","G"],"181085":["Control Groups 1-10","G"],"181086":["Control Groups 1-10","G"],"181087":["Control Groups 1-10","G"],"181088":["Control Groups 1-10","G"],"181089":["Control Groups 11-20","G"],"181090":["Control Groups 11-20","G"],"181091":["Control Groups 11-20","G"],"181092":["Control Groups 11-20","G"],"181093":["Control Groups 11-20","G"],"181094":["Control Groups 11-20","G"],"181095":["Control Groups 11-20","G"],"181096":["Control Groups 11-20","G"],"181097":["Control Groups 11-20","G"],"181098":["Control Groups 11-20","G"],"19099":["Control Groups 1-10","G"],"19006":["Scroll Commands","G"],"19007":["Scroll Commands","G"],"19008":["Scroll Commands","G"],"19009":["Scroll Commands","G"],"19128":["Scroll Commands","G"],"20031":["Spectator/Replay Commands","R"],"20032":["Spectator/Replay Commands","R"],"20033":["Spectator/Replay Commands","R"],"20034":["Spectator/Replay Commands","R"],"20035":["Spectator/Replay Commands","R"],"20036":["Spectator/Replay Commands","R"],"20037":["Spectator/Replay Commands","R"],"20038":["Spectator/Replay Commands","R"],"20039":["Spectator/Replay Commands","R"],"20040":["Spectator/Replay Commands","R"],"20041":["Spectator/Replay Commands","R"],"20042":["Spectator/Replay Commands","R"],"20043":["Spectator/Replay Commands","R"],"20044":["Spectator/Replay Commands","R"],"20045":["Spectator/Replay Commands","R"],"19312":["Military Unit Commands","U:military"],"19313":["Military Unit Commands","U:military"],"19314":["Military Unit Commands","U:military"],"19315":["Military Unit Commands","U:military"],"19316":["Military Unit Commands","U:military"],"19317":["Military Unit Commands","U:military"],"19318":["Military Unit Commands","U:military"],"200008":["Military Unit Commands","U:military"],"19350":["Military Unit Commands","X:autoscout"],"19352":["Villager Commands","U:villager"],"19303":["Military Unit Commands","U:military"],"19304":["Military Unit Commands","U:military"],"19305":["Military Unit Commands","U:military"],"19306":["Military Unit Commands","U:military"],"19234":["Military Unit Commands","U:military"],"19087":["Zoom Commands","G"],"19088":["Zoom Commands","G"],"19089":["Zoom Commands","G"],"19090":["Zoom Commands","G"],"19120":["Zoom Commands","G"],"19331":["Gate Commands","D:gate"],"19332":["Gate Commands","D:gate"],"19122":["Gate Commands","D:gate"],"19214":["Villager Commands","U:villager"],"19215":["Villager Commands","U:villager"],"19224":["Villager Commands","U:villager"],"19216":["Unit Commands","U:any"],"19225":["Garrisons/Transports","T:gt"],"19263":["Siege Commands","U:siege"],"19241":["Siege Commands","U:siege"],"19242":["Siege Commands","U:siege"],"19221":["Monk Commands","U:monk"],"19222":["Monk Commands","U:monk"],"19233":["Monk Commands","U:monk"],"19012":["Unit Commands","U:nonsiege"],"19002":["Production Buildings","D:any"],"19220":["Siege Commands","U:siege"],"19121":["Production Buildings","D:any"],"20208":["Garrisons/Transports","T:gt"],"19144":["Hybrid Units","U:hybrid"],"19162":["Hybrid Units","U:hybrid"],"19217":["Dock","D:Dock"],"400017":["Villager Commands","U:villager"],"400021":["Villager Commands","U:villager"],"19161":["Production Buildings","D:any"],"19743":["Dock","D:Dock"],"19190":["Trade Commands","U:trade"],"19191":["Trade Commands","U:trade"],"19192":["Trade Commands","U:trade"],"19003":["Select Commands","G"],"19013":["Select Commands","G"],"419009":["Select Commands","G"],"419010":["Select Commands","G"],"19014":["Select Commands","G"],"19015":["Select Commands","G"],"19016":["Select Commands","G"],"19017":["Select Commands","G"],"19018":["Select Commands","G"],"19020":["Select Commands","G"],"19159":["Select Commands","G"],"19021":["Select Commands","G"],"19131":["Select Commands","G"],"19132":["Select Commands","G"],"19155":["Select Commands","G"],"19156":["Select Commands","G"],"19157":["Select Commands","G"],"19133":["Select Commands","G"],"19019":["Select Commands","G"],"19137":["Select Commands","G"],"19164":["Select Commands","G"],"419132":["Select Commands","G"],"419040":["Select Commands","G"],"419134":["Select Commands","G"],"419146":["Select Commands","G"],"19026":["Go-To Commands","G"],"19027":["Go-To Commands","G"],"19269":["Go-To Commands","G"],"19270":["Go-To Commands","G"],"19271":["Go-To Commands","G"],"19272":["Go-To Commands","G"],"19273":["Go-To Commands","G"],"419031":["Go-To Commands","G"],"419032":["Go-To Commands","G"],"19274":["Go-To Commands","G"],"19354":["Go-To Commands","G"],"19275":["Go-To Commands","G"],"19276":["Go-To Commands","G"],"19277":["Go-To Commands","G"],"19290":["Go-To Commands","G"],"19291":["Go-To Commands","G"],"19292":["Go-To Commands","G"],"19330":["Go-To Commands","G"],"19136":["Go-To Commands","G"],"19165":["Go-To Commands","G"],"419133":["Go-To Commands","G"],"419041":["Go-To Commands","G"],"419135":["Go-To Commands","G"],"419145":["Go-To Commands","G"],"19213":["Build Economic Buildings","B:eco"],"19236":["Build Economic Buildings","B:eco"],"19063":["Build Economic Buildings","B:eco"],"19067":["Build Economic Buildings","B:eco"],"419007":["Build Economic Buildings","B:eco"],"419008":["Build Military Buildings","B:mil"],"19064":["Build Military Buildings","B:mil"],"19210":["Build Military Buildings","B:mil"],"19237":["Build Economic Buildings","B:eco"],"19211":["Build Military Buildings","B:mil"],"19201":["Build Military Buildings","B:mil"],"19204":["Build Military Buildings","B:mil"],"19264":["Build Military Buildings","B:mil"],"19200":["Build Economic Buildings","B:eco"],"19062":["Build Military Buildings","B:mil"],"19206":["Build Military Buildings","B:mil"],"19065":["Build Economic Buildings","B:eco"],"19238":["Build Economic Buildings","B:eco"],"19205":["Build Military Buildings","B:mil"],"19208":["Build Economic Buildings","B:eco"],"19209":["Build Economic Buildings","B:eco"],"19066":["Build Military Buildings","B:mil"],"19283":["Build Economic Buildings","B:eco"],"19288":["Build Economic Buildings","B:eco"],"19202":["Fishing Ship Build","U:fishing"],"19203":["Build Military Buildings","B:mil"],"19243":["Build Economic Buildings","B:eco"],"19212":["Build Military Buildings","B:mil"],"19075":["Build Economic Buildings","B:eco"],"19329":["Build Military Buildings","B:mil"],"19186":["Build Economic Buildings","B:eco"],"19138":["Build Military Buildings","B:mil"],"19148":["Build Economic Buildings","B:eco"],"19158":["Build Economic Buildings","B:eco"],"419144":["Build Military Buildings","B:mil"],"419157":["Build Economic Buildings","B:eco"],"19163":["Build Economic Buildings","B:eco"],"19054":["Town Center","D:Town Center"],"419033":["Town Center","D:Town Center"],"19319":["Town Center","D:Town Center"],"19324":["Town Center","D:Town Center"],"19333":["Town Center","D:Town Center"],"19334":["Town Center","D:Town Center"],"19335":["Town Center","D:Town Center"],"19336":["Town Center","D:Town Center"],"400018":["Town Center","D:Town Center"],"419042":["Town Center","D:Town Center"],"419043":["Town Center","D:Town Center"],"419044":["Town Center","D:Town Center"],"419045":["Town Center","D:Town Center"],"419046":["Town Center","D:Town Center"],"419047":["Town Center","D:Town Center"],"419050":["Town Center","D:Town Center"],"419051":["Town Center","D:Town Center"],"419048":["Town Center","D:Town Center"],"19045":["Dock","D:Dock"],"19044":["Dock","D:Dock"],"19059":["Dock","D:Dock"],"19055":["Dock","D:Dock"],"19279":["Dock","D:Dock"],"19280":["Dock","D:Dock"],"19358":["Dock","D:Dock"],"19355":["Dock","D:Dock"],"19284":["Dock","D:Dock"],"19053":["Dock","D:Dock"],"19341":["Dock","D:Dock"],"19344":["Dock","D:Dock"],"19345":["Dock","D:Dock"],"19347":["Dock","D:Dock"],"19457":["Dock","D:Dock"],"19123":["Dock","D:Dock"],"19101":["Dock","D:Dock"],"19154":["Dock","D:Dock"],"19035":["Barracks","D:Barracks"],"19034":["Barracks","D:Barracks"],"19070":["Barracks","D:Barracks"],"19073":["Barracks","D:Barracks"],"19125":["Barracks","D:Barracks"],"419001":["Barracks","D:Barracks"],"19451":["Barracks","D:Barracks"],"19452":["Barracks","D:Barracks"],"19453":["Barracks","D:Barracks"],"19166":["Barracks","D:Barracks"],"19454":["Barracks","D:Barracks"],"19455":["Barracks","D:Barracks"],"19456":["Barracks","D:Barracks"],"419038":["Barracks","D:Barracks"],"19141":["Barracks","D:Barracks"],"419140":["Barracks","D:Barracks"],"419216":["Barracks","D:Barracks"],"419217":["Barracks","D:Barracks"],"19038":["Archery Range","D:Archery Range"],"19043":["Archery Range","D:Archery Range"],"19040":["Archery Range","D:Archery Range"],"19041":["Archery Range","D:Archery Range"],"19032":["Archery Range","D:Archery Range"],"19126":["Archery Range","D:Archery Range"],"19458":["Archery Range","D:Archery Range"],"19459":["Archery Range","D:Archery Range"],"19460":["Archery Range","D:Archery Range"],"19463":["Archery Range","D:Archery Range"],"19461":["Archery Range","D:Archery Range"],"19462":["Archery Range","D:Archery Range"],"19145":["Archery Range","D:Archery Range"],"19149":["Archery Range","D:Archery Range"],"419141":["Archery Range","D:Archery Range"],"19060":["Stable","D:Stable"],"19031":["Stable","D:Stable"],"19030":["Stable","D:Stable"],"19033":["Stable","D:Stable"],"19124":["Stable","D:Stable"],"19127":["Stable","D:Stable"],"419003":["Stable","D:Stable"],"19464":["Stable","D:Stable"],"19465":["Stable","D:Stable"],"19466":["Stable","D:Stable"],"19467":["Stable","D:Stable"],"419004":["Stable","D:Stable"],"19468":["Stable","D:Stable"],"19469":["Stable","D:Stable"],"19143":["Stable","D:Stable"],"19147":["Stable","D:Stable"],"19152":["Stable","D:Stable"],"19151":["Stable","D:Stable"],"419142":["Stable","D:Stable"],"419218":["Stable","D:Stable"],"419219":["Stable","D:Stable"],"19056":["Siege Workshop","D:Siege Workshop"],"19049":["Siege Workshop","D:Siege Workshop"],"19285":["Siege Workshop","D:Siege Workshop"],"19047":["Siege Workshop","D:Siege Workshop"],"19048":["Siege Workshop","D:Siege Workshop"],"19475":["Siege Workshop","D:Siege Workshop"],"19476":["Siege Workshop","D:Siege Workshop"],"19477":["Siege Workshop","D:Siege Workshop"],"19142":["Siege Workshop","D:Siege Workshop"],"19146":["Siege Workshop","D:Siege Workshop"],"19150":["Siege Workshop","D:Siege Workshop"],"19134":["Siege Workshop","D:Siege Workshop"],"19051":["Monastery","D:Monastery"],"19071":["Monastery","D:Monastery"],"19478":["Monastery","D:Monastery"],"19479":["Monastery","D:Monastery"],"19480":["Monastery","D:Monastery"],"19481":["Monastery","D:Monastery"],"19482":["Monastery","D:Monastery"],"19483":["Monastery","D:Monastery"],"19484":["Monastery","D:Monastery"],"19485":["Monastery","D:Monastery"],"19486":["Monastery","D:Monastery"],"19487":["Monastery","D:Monastery"],"19286":["Market","D:Market"],"19348":["Market","D:Market"],"19349":["Market","D:Market"],"19450":["Market","D:Market"],"19102":["Market","D:Market"],"19103":["Market","D:Market"],"19104":["Market","D:Market"],"19111":["Market","D:Market"],"19112":["Market","D:Market"],"19113":["Market","D:Market"],"19321":["Castle","D:Castle"],"19322":["Castle","D:Castle"],"19069":["Castle","D:Castle"],"19080":["Castle","D:Castle"],"19082":["Castle","D:Castle"],"19081":["Castle","D:Castle"],"19083":["Castle","D:Castle"],"19084":["Castle","D:Castle"],"19085":["Castle","D:Castle"],"19086":["Castle","D:Castle"],"19130":["Castle","D:Castle"],"19074":["Mill","D:Mill"],"19337":["Mill","D:Mill"],"19100":["Mill","D:Mill"],"19338":["Mining Camp","D:Mining Camp"],"19339":["Mining Camp","D:Mining Camp"],"19340":["Lumber Camp","D:Lumber Camp"],"19470":["Blacksmith","D:Blacksmith"],"19473":["Blacksmith","D:Blacksmith"],"19471":["Blacksmith","D:Blacksmith"],"19472":["Blacksmith","D:Blacksmith"],"19474":["Blacksmith","D:Blacksmith"],"19488":["University","D:University"],"19489":["University","D:University"],"19490":["University","D:University"],"19491":["University","D:University"],"19492":["University","D:University"],"19493":["University","D:University"],"19494":["University","D:University"],"19495":["University","D:University"],"19496":["University","D:University"],"19497":["University","D:University"],"19342":["University","D:University"],"19356":["University","D:University"],"19343":["University","D:University"],"19357":["University","D:University"],"19174":["Mule Cart","D:Mule Cart"],"19170":["Mule Cart","D:Mule Cart"],"19172":["Mule Cart","D:Mule Cart"],"19187":["Donjon","D:Donjon"],"19167":["Donjon","D:Donjon"],"19175":["Settlement","D:Settlement"],"19171":["Settlement","D:Settlement"],"19173":["Settlement","D:Settlement"],"19169":["Settlement","D:Settlement"],"19179":["Settlement","D:Settlement"],"19168":["Settlement","D:Settlement"],"19189":["Settlement","D:Settlement"],"19188":["Settlement","D:Settlement"],"19181":["Fort","D:Fort"],"19182":["Fort","D:Fort"],"19185":["Fort","D:Fort"],"419005":["Fort","D:Fort"],"419058":["Fort","D:Fort"],"419006":["Fort","D:Fort"],"419059":["Fort","D:Fort"],"419138":["Fort","D:Fort"],"419139":["Fort","D:Fort"],"419011":["Port","D:Port"],"419012":["Port","D:Port"],"419013":["Port","D:Port"],"419014":["Port","D:Port"],"419016":["Port","D:Port"],"419017":["Port","D:Port"],"419018":["Port","D:Port"],"419015":["Port","D:Port"],"19184":["Port","D:Port"],"19183":["Port","D:Port"],"419057":["Port","D:Port"],"419019":["Shipyard","D:Shipyard"],"419020":["Shipyard","D:Shipyard"],"419021":["Shipyard","D:Shipyard"],"419023":["Shipyard","D:Shipyard"],"419024":["Shipyard","D:Shipyard"],"419030":["Shipyard","D:Shipyard"],"419025":["Shipyard","D:Shipyard"],"419026":["Shipyard","D:Shipyard"],"419027":["Shipyard","D:Shipyard"],"419029":["Shipyard","D:Shipyard"],"419137":["Outpost","D:Outpost"],"419073":["Campaign: Battle for Greece","CAMP"],"419074":["Campaign: Battle for Greece","CAMP"],"419075":["Campaign: Battle for Greece","CAMP"],"419076":["Campaign: Battle for Greece","CAMP"],"419077":["Campaign: Battle for Greece","CAMP"],"419078":["Campaign: Battle for Greece","CAMP"],"419079":["Campaign: Battle for Greece","CAMP"],"419080":["Campaign: Battle for Greece","CAMP"],"419081":["Campaign: Battle for Greece","CAMP"],"419082":["Campaign: Battle for Greece","CAMP"],"419083":["Campaign: Battle for Greece","CAMP"],"419089":["Campaign: Battle for Greece","CAMP"],"419092":["Campaign: Battle for Greece","CAMP"],"419093":["Campaign: Battle for Greece","CAMP"],"419094":["Campaign: Battle for Greece","CAMP"],"419084":["Campaign: Battle for Greece","CAMP"],"419085":["Campaign: Battle for Greece","CAMP"],"419086":["Campaign: Battle for Greece","CAMP"],"419087":["Campaign: Battle for Greece","CAMP"],"419088":["Campaign: Battle for Greece","CAMP"],"419091":["Campaign: Battle for Greece","CAMP"],"419090":["Campaign: Battle for Greece","CAMP"],"419095":["Campaign: Battle for Greece","CAMP"],"419096":["Campaign: Battle for Greece","CAMP"],"419097":["Campaign: Battle for Greece","CAMP"],"419098":["Campaign: Battle for Greece","CAMP"],"419099":["Campaign: Battle for Greece","CAMP"],"419100":["Campaign: Battle for Greece","CAMP"],"419101":["Campaign: Battle for Greece","CAMP"],"419102":["Campaign: Battle for Greece","CAMP"],"419103":["Campaign: Battle for Greece","CAMP"],"419104":["Campaign: Battle for Greece","CAMP"],"419105":["Campaign: Battle for Greece","CAMP"],"419106":["Campaign: Battle for Greece","CAMP"],"419107":["Campaign: Battle for Greece","CAMP"],"419108":["Campaign: Battle for Greece","CAMP"],"419109":["Campaign: Battle for Greece","CAMP"],"419110":["Campaign: Battle for Greece","CAMP"],"419111":["Campaign: Battle for Greece","CAMP"],"419112":["Campaign: Battle for Greece","CAMP"],"419113":["Campaign: Battle for Greece","CAMP"],"419114":["Campaign: Battle for Greece","CAMP"],"419115":["Campaign: Battle for Greece","CAMP"],"419116":["Campaign: Battle for Greece","CAMP"],"419117":["Campaign: Battle for Greece","CAMP"],"419118":["Campaign: Battle for Greece","CAMP"],"419119":["Campaign: Battle for Greece","CAMP"],"419120":["Campaign: Battle for Greece","CAMP"],"419121":["Campaign: Battle for Greece","CAMP"],"419122":["Campaign: Battle for Greece","CAMP"],"419123":["Campaign: Battle for Greece","CAMP"],"419124":["Campaign: Battle for Greece","CAMP"],"419125":["Campaign: Battle for Greece","CAMP"],"419126":["Campaign: Battle for Greece","CAMP"],"419127":["Campaign: Battle for Greece","CAMP"],"419128":["Campaign: Battle for Greece","CAMP"],"419129":["Campaign: Battle for Greece","CAMP"],"419130":["Campaign: Battle for Greece","CAMP"],"419131":["Campaign: Battle for Greece","CAMP"],"419147":["Campaign: Alexander the Great","CAMP"],"419148":["Campaign: Alexander the Great","CAMP"],"419149":["Campaign: Alexander the Great","CAMP"],"419150":["Campaign: Alexander the Great","CAMP"],"419151":["Campaign: Alexander the Great","CAMP"],"419152":["Campaign: Alexander the Great","CAMP"],"419153":["Campaign: Alexander the Great","CAMP"],"419154":["Campaign: Alexander the Great","CAMP"],"419155":["Campaign: Alexander the Great","CAMP"],"419156":["Campaign: Alexander the Great","CAMP"],"419158":["Campaign: Alexander the Great","CAMP"],"419159":["Campaign: Alexander the Great","CAMP"],"419160":["Campaign: Alexander the Great","CAMP"],"419161":["Campaign: Alexander the Great","CAMP"],"419162":["Campaign: Alexander the Great","CAMP"],"419163":["Campaign: Alexander the Great","CAMP"],"419164":["Campaign: Alexander the Great","CAMP"],"419165":["Campaign: Alexander the Great","CAMP"],"419166":["Campaign: Alexander the Great","CAMP"],"419167":["Campaign: Alexander the Great","CAMP"],"419168":["Campaign: Alexander the Great","CAMP"],"419169":["Campaign: Alexander the Great","CAMP"],"419170":["Campaign: Alexander the Great","CAMP"],"419171":["Campaign: Alexander the Great","CAMP"],"419172":["Campaign: Alexander the Great","CAMP"],"419173":["Campaign: Alexander the Great","CAMP"],"419174":["Campaign: Alexander the Great","CAMP"],"419175":["Campaign: Alexander the Great","CAMP"],"419176":["Campaign: Alexander the Great","CAMP"],"419177":["Campaign: Alexander the Great","CAMP"],"419178":["Campaign: Alexander the Great","CAMP"],"419179":["Campaign: Alexander the Great","CAMP"],"419180":["Campaign: Alexander the Great","CAMP"],"419181":["Campaign: Alexander the Great","CAMP"],"419182":["Campaign: Alexander the Great","CAMP"],"419183":["Campaign: Alexander the Great","CAMP"],"419184":["Campaign: Alexander the Great","CAMP"],"419185":["Campaign: Alexander the Great","CAMP"],"419186":["Campaign: Alexander the Great","CAMP"],"419187":["Campaign: Alexander the Great","CAMP"],"419188":["Campaign: Alexander the Great","CAMP"],"419189":["Campaign: Alexander the Great","CAMP"],"419190":["Campaign: Alexander the Great","CAMP"],"419191":["Campaign: Alexander the Great","CAMP"],"419192":["Campaign: Alexander the Great","CAMP"],"419193":["Campaign: Alexander the Great","CAMP"],"419194":["Campaign: Alexander the Great","CAMP"],"419195":["Campaign: Alexander the Great","CAMP"],"419196":["Campaign: Alexander the Great","CAMP"],"419197":["Campaign: Alexander the Great","CAMP"],"419198":["Campaign: Alexander the Great","CAMP"],"419199":["Campaign: Alexander the Great","CAMP"],"419200":["Campaign: Alexander the Great","CAMP"],"419201":["Campaign: Alexander the Great","CAMP"],"419202":["Campaign: Alexander the Great","CAMP"],"419203":["Campaign: Alexander the Great","CAMP"],"419204":["Campaign: Alexander the Great","CAMP"],"419205":["Campaign: Alexander the Great","CAMP"],"419206":["Campaign: Alexander the Great","CAMP"],"419207":["Campaign: Alexander the Great","CAMP"],"419208":["Campaign: Alexander the Great","CAMP"],"419209":["Campaign: Alexander the Great","CAMP"],"419210":["Campaign: Alexander the Great","CAMP"],"419211":["Campaign: Alexander the Great","CAMP"],"419212":["Campaign: Alexander the Great","CAMP"],"419213":["Campaign: Alexander the Great","CAMP"],"419214":["Campaign: Alexander the Great","CAMP"],"419215":["Campaign: Alexander the Great","CAMP"],"419221":["Campaign: Alexander the Great","CAMP"],"419222":["Campaign: Alexander the Great","CAMP"],"419220":["Campaign: Alexander the Great","CAMP"],"419223":["Campaign: Alexander the Great","CAMP"],"419224":["Campaign: Alexander the Great","CAMP"],"419225":["Campaign: Alexander the Great","CAMP"],"419226":["Campaign: Alexander the Great","CAMP"],"419227":["Campaign: Alexander the Great","CAMP"],"419228":["Campaign: Alexander the Great","CAMP"],"419229":["Campaign: Alexander the Great","CAMP"],"419230":["Campaign: Alexander the Great","CAMP"],"419231":["Campaign: Alexander the Great","CAMP"],"419232":["Campaign: Alexander the Great","CAMP"]},"chronicles":[19181,19182,19183,19184,19185,419001,419003,419004,419005,419006,419007,419008,419009,419010,419011,419012,419013,419014,419015,419016,419017,419018,419019,419020,419021,419023,419024,419025,419026,419027,419029,419030,419031,419032,419033,419038,419040,419041,419042,419043,419044,419045,419046,419047,419048,419050,419051,419057,419058,419059,419066,419067,419068,419069,419070,419071,419073,419074,419075,419076,419077,419078,419079,419080,419081,419082,419083,419084,419085,419086,419087,419088,419089,419090,419091,419092,419093,419094,419095,419096,419097,419098,419099,419100,419101,419102,419103,419104,419105,419106,419107,419108,419109,419110,419111,419112,419113,419114,419115,419116,419117,419118,419119,419120,419121,419122,419123,419124,419125,419126,419127,419128,419129,419130,419131,419132,419133,419134,419135,419137,419138,419139,419140,419141,419142,419144,419145,419146,419147,419148,419149,419150,419151,419152,419153,419154,419155,419156,419157,419158,419159,419160,419161,419162,419163,419164,419165,419166,419167,419168,419169,419170,419171,419172,419173,419174,419175,419176,419177,419178,419179,419180,419181,419182,419183,419184,419185,419186,419187,419188,419189,419190,419191,419192,419193,419194,419195,419196,419197,419198,419199,419200,419201,419202,419203,419204,419205,419206,419207,419208,419209,419210,419211,419212,419213,419214,419215,419216,419217,419218,419219,419220,419221,419222,419223,419224,419225,419226,419227,419228,419229,419230,419231,419232],"hidden":[19352]}}}; /* __GAME_DATA__ */</script>
+<script>
+
+// ===== per-game module registry (the multi-game seam) ============================
+// This file is the generic engine/UI shell: it never calls game-specific code
+// directly, only through GAME.* (codec / naming / grouping / conflict rules / mouse
+// input / data shape).  The active game's implementations live in its own module
+// (e.g. games/aoe2/module.js), injected at the "active game module" marker below by
+// game_module_generator.py --build.  GAMES collects the registered games (each module
+// registers its own slot); GAME — the active one — is picked from window.GAME_DATA.game
+// just after the module is injected (search "active game module").
+const GAMES = {};
+let GAME = null;                   // assigned once the game module has registered (below)
+
+const state = { profile:null, base:null, name:'Hotkeys' };
+let capture = null;          // {rec, btn}
+let shadeByCount = true;     // request 5 toggle
+let layout = 'qwerty';       // 'qwerty' | 'dvorak' — drives keybind conversion + key labels
+let hideChronicles = true;   // Chronicles is a separate mode; hidden by default
+let hasChron = false;        // whether the loaded profile contains any Chronicles content
+const collapsed = new Set(); // collapsed group names (request 3)
+
+// ---- virtual-key code -> label ----
+const VK = {8:'Backspace',9:'Tab',13:'Enter',19:'Pause',20:'CapsLock',27:'Esc',
+  32:'Space',33:'PageUp',34:'PageDown',35:'End',36:'Home',37:'←',38:'↑',
+  39:'→',40:'↓',44:'PrtSc',45:'Insert',46:'Delete',91:'LWin',92:'RWin',
+  93:'Menu',106:'Num*',107:'Num+',109:'Num-',110:'Num.',111:'Num/',144:'NumLock',
+  145:'ScrollLock',160:'LShift',161:'RShift',162:'LCtrl',163:'RCtrl',164:'LAlt',
+  165:'RAlt',186:';',187:'=',188:',',189:'-',190:'.',191:'/',192:'`',219:'[',
+  220:'\\',221:']',222:"'"};
+for (let i=48;i<=57;i++) VK[i]=String.fromCharCode(i);            // 0-9
+for (let i=65;i<=90;i++) VK[i]=String.fromCharCode(i);            // A-Z
+for (let i=96;i<=105;i++) VK[i]='Num'+(i-96);                     // Numpad 0-9
+for (let i=112;i<=135;i++) VK[i]='F'+(i-111);                     // F1-F24
+// Mouse-button VK labels (e.g. AoE2's codes 251-255) come from the active game
+// module — GAME.input.vkLabels, consulted in vkLabel() below.
+const MODS = {16:1,17:1,18:1};
+const GECKO = {59:186, 61:187, 173:189};  // Firefox keyCodes for ; = - -> Windows VK
+
+function vkLabel(c){ if(!c) return ''; return GAME.input.vkLabels[c] || VK[c] || ('VK'+c); }
+function comboLabel(e){
+  if(!e.code) return '(unbound)';
+  let s=''; if(e.ctrl)s+='Ctrl+'; if(e.alt)s+='Alt+'; if(e.shift)s+='Shift+';
+  return s + vkLabel(e.code);
+}
+// ---- QWERTY <-> Dvorak vk map (mirror of dvorak_convert.py) ----
+const CHAR_TO_VK = {"'":0xDE,",":0xBC,".":0xBE,"/":0xBF,";":0xBA,"[":0xDB,"]":0xDD,
+  "-":0xBD,"=":0xBB,"\\":0xDC,"`":0xC0};
+for(const c of "abcdefghijklmnopqrstuvwxyz0123456789") CHAR_TO_VK[c]=c.toUpperCase().charCodeAt(0);
+const LAYOUT_CHANGES=[["-","["],["=","]"],["q","'"],["w",","],["e","."],["r","p"],
+ ["t","y"],["y","f"],["u","g"],["i","c"],["o","r"],["p","l"],["[","/"],["]","="],
+ ["s","o"],["d","e"],["f","u"],["g","i"],["h","d"],["j","h"],["k","t"],["l","n"],
+ [";","s"],["'","-"],["z",";"],["x","q"],["c","j"],["v","k"],["b","x"],["n","b"],
+ [",","w"],[".","v"],["/","z"]];
+function buildVkMap(reverse){
+  const m={};
+  for(const [q,d] of LAYOUT_CHANGES){
+    const src=reverse?d:q, dst=reverse?q:d;
+    m[CHAR_TO_VK[src]]=CHAR_TO_VK[dst];
+  }
+  return m;
+}
+const VK_TO_CHAR={}; for(const ch in CHAR_TO_VK) VK_TO_CHAR[CHAR_TO_VK[ch]]=ch;
+const Q2D={}; for(const [q,d] of LAYOUT_CHANGES) Q2D[q]=d;   // qwerty char -> dvorak char
+// What a physical key shows / reports under the current layout.  In Dvorak the
+// alpha/punctuation keys take their Dvorak char + vk; everything else is fixed.
+function keyDisplay(spec){
+  if(spec.vk===undefined) return {vk:undefined, label:spec.l};
+  if(layout==='dvorak'){
+    const ch=VK_TO_CHAR[spec.vk];
+    if(ch!==undefined && Q2D[ch]!==undefined){
+      const dch=Q2D[ch];
+      return {vk:CHAR_TO_VK[dch], label:(dch>='a'&&dch<='z')?dch.toUpperCase():dch};
+    }
+  }
+  return {vk:spec.vk, label:spec.l};
+}
+
+// ---- model ----
+// Every entry with id>0 is its own editable record (no dedup, no syncing) so
+// that alternate bindings -- the same id stored more than once, e.g. "Go to
+// Next Idle Villager (2)" -- each get their own row, exactly like the game UI.
+let allRecs=[];              // [{e, id, occ}]
+let recsById=new Map();      // id -> [rec]
+let recByKey=new Map();      // vk(number) | 'ctrl'|'alt'|'shift' -> [rec]
+let groupedView=[];          // [{name, recs:[rec]}]
+let keyEls={};               // 'k'+vk | 'm'+mod -> [keyboard DOM elements]
+let cmdEls=new Map();        // rec -> command-row DOM element (rebuilt each renderList)
+let selectedKey=null;        // 'k'+vk | 'm'+mod currently filtering, or null
+let selectedGroup=null;      // group name whose heading is "selected" (keys highlighted), or null
+function buildModel(){
+  const full=GAME.bindings().filter(r=>!r.hidden);   // always drop hidden cmds (kept in state for saving)
+  hasChron=full.some(r=>r.chron);
+  allRecs = hideChronicles ? full.filter(r=>!r.chron) : full;   // chronicles entries also stay in state
+  const cw=document.getElementById('chronWrap'); if(cw) cw.style.display=hasChron?'':'none';
+  recsById=new Map();
+  allRecs.forEach(r=>{ if(!recsById.has(r.id)) recsById.set(r.id,[]); recsById.get(r.id).push(r); });
+  const byName=new Map(); const order=[];
+  const push=(name,r)=>{ if(!byName.has(name)){ byName.set(name,[]); order.push(name); } byName.get(name).push(r); };
+  // group every command by its real command card, or its file section for globals
+  allRecs.forEach(r=>push(GAME.groupOf(r), r));
+  groupedView=order.map(n=>({name:n, recs:byName.get(n)}));
+  indexKeys();
+  computeConflicts();
+}
+function indexKeys(){
+  recByKey=new Map();
+  const add=(k,r)=>{ if(!recByKey.has(k)) recByKey.set(k,[]); recByKey.get(k).push(r); };
+  allRecs.forEach(r=>{
+    const e=r.e;
+    if(e.code) add(e.code, r);
+    if(e.ctrl) add('ctrl', r);
+    if(e.alt)  add('alt', r);
+    if(e.shift) add('shift', r);
+  });
+}
+
+// ---- conflict detection (context-aware, civ-data-backed) ----
+// Context comes from the file's OWN structure (reliable), not the community group
+// list (incomplete for newer DLC commands):
+//   base Game/Cycle commands + profile global menus = always-active GLOBAL
+//   profile replay menu = REPLAY ; base Unit commands + stances = SELECTION
+//   each detached group / gate menu = a command card (contextual, overrides global)
+let dataReady=false;          // dataset (GAME.setData) has been applied -- gates conflict computation
+let conflictByRec=new Map();  // rec -> [{other, sev, civs?}]
+let conflictKeys=new Set();
+let recSev=new Map();         // rec -> highest severity
+let keySev=new Map();         // 'k'+vk -> highest non-override severity
+let conflictClusters=[];      // [{code,ctrl,alt,shift,combo,ctx,sev,civs,members}] for the warnings panel
+let showConflictsOnly=false;
+function sevRank(s){ return s==='confirmed'?3:s==='possible'?2:s==='override'?1:0; }
+function computeConflicts(){
+  conflictByRec=new Map(); conflictKeys=new Set(); recSev=new Map(); keySev=new Map();
+  conflictClusters=[];
+  if(!dataReady) return;
+  const byCombo=new Map();
+  allRecs.forEach(r=>{ const e=r.e; if(!e.code) return;
+    const key=e.code+'/'+(e.ctrl?1:0)+(e.alt?1:0)+(e.shift?1:0);
+    if(!byCombo.has(key)) byCombo.set(key,[]); byCombo.get(key).push(r); });
+  const add=(r,other,sev,civs,note)=>{
+    if(!conflictByRec.has(r)) conflictByRec.set(r,[]);
+    conflictByRec.get(r).push({other:other, sev:sev, civs:civs||null, note:note||null});
+    if(sevRank(sev)>sevRank(recSev.get(r))) recSev.set(r,sev);
+    if(sev!=='override'){ const k='k'+r.e.code; conflictKeys.add(k);
+      if(sevRank(sev)>sevRank(keySev.get(k))) keySev.set(k,sev); }
+  };
+  byCombo.forEach(recs=>{
+    if(recs.length<2) return;
+    // union-find the recs that actually clash (non-override), so each connected set
+    // surfaces as one panel warning ("these commands all collide on this combo")
+    const parent=recs.map((_,i)=>i);
+    const find=x=>{ while(parent[x]!==x){ parent[x]=parent[parent[x]]; x=parent[x]; } return x; };
+    const edges=[];
+    for(let a=0;a<recs.length;a++) for(let b=a+1;b<recs.length;b++){
+      const ra=recs[a], rb=recs[b]; if(ra.id===rb.id) continue;
+      const res=GAME.classify(ra,rb);
+      if(!res) continue;
+      add(ra,rb,res.sev,res.civs,res.note); add(rb,ra,res.sev,res.civs,res.note);
+      if(res.sev!=='override'){ const pa=find(a), pb=find(b); if(pa!==pb) parent[pa]=pb;
+        edges.push({a:a, sev:res.sev, civs:res.civs||null}); }
+    }
+    if(!edges.length) return;
+    const sevByRoot=new Map(), civsByRoot=new Map();
+    edges.forEach(e=>{ const root=find(e.a);
+      if(e.sev==='confirmed') sevByRoot.set(root,'confirmed');
+      else if(!sevByRoot.has(root)) sevByRoot.set(root,'possible');
+      if(e.civs && !civsByRoot.has(root)) civsByRoot.set(root, e.civs); });
+    const byRoot=new Map();
+    recs.forEach((r,i)=>{ const root=find(i); if(!sevByRoot.has(root)) return;   // not part of any clash
+      if(!byRoot.has(root)) byRoot.set(root,[]); byRoot.get(root).push(r); });
+    byRoot.forEach((members,root)=>{
+      if(members.length<2) return;
+      const e=members[0].e;
+      conflictClusters.push({ code:e.code, ctrl:e.ctrl, alt:e.alt, shift:e.shift,
+        combo:comboLabel(e), ctx:GAME.context(members[0]),
+        sev:sevByRoot.get(root)||'possible', civs:civsByRoot.get(root)||null, members:members });
+    });
+  });
+  conflictClusters.sort((a,b)=> a.sev===b.sev ? a.combo.localeCompare(b.combo)
+                                              : (a.sev==='confirmed'?-1:1));
+}
+function conflictTip(r){
+  const lead={confirmed:'Conflict',possible:'Possible clash',override:'Caution: card overrides this global'};
+  return (conflictByRec.get(r)||[]).map(c=> c.note
+    ? ('Note: '+GAME.recName(c.other)+' — '+c.note)
+    : (lead[c.sev]+': '+GAME.recName(c.other)
+       +(c.civs?(' ('+c.civs.length+' civ'+(c.civs.length>1?'s':'')+')'):''))
+  ).join('\n');
+}
+function updateConflictBadge(){
+  const b=document.getElementById('conflictbadge');
+  if(!dataReady){ b.style.display='none'; return; }
+  b.style.display='';
+  let c=0,p=0,o=0; recSev.forEach(s=>{ if(s==='confirmed')c++; else if(s==='possible')p++; else o++; });
+  b.className=((c+p+o)?'has':'none')+(showConflictsOnly?' on':'');
+  b.innerHTML=(c+p+o) ? ('⚠ '+c+' <span class="sp">⚐ '+p+'</span> <span class="so">ⓘ '+o+'</span>')
+                      : '✓ no conflicts';
+  b.title='Click to show only flagged commands';
+}
+// big, color-coded confirmed/possible warnings in the panel left of the keyboard
+function renderConflictPanel(){
+  const el=document.getElementById('conflictpanel'); if(!el) return;
+  if(!dataReady || (!state.base && !state.profile)){ el.innerHTML=''; return; }
+  let c=0,p=0; conflictClusters.forEach(k=>{ k.sev==='confirmed'?c++:p++; });
+  let html='<h3>Hotkey conflicts</h3>';
+  if(!conflictClusters.length){
+    el.innerHTML=html+'<div class="cok">✓ No conflicts found</div>'; return;
+  }
+  const sum=[]; if(c) sum.push('<b style="color:var(--sev-confirmed)">'+c+' confirmed</b>');
+  if(p) sum.push('<b style="color:var(--sev-possible)">'+p+' possible</b>');
+  html+='<div class="csum">'+sum.join(' &middot; ')+'</div>';
+  html+='<div class="cgrid">'+conflictClusters.map((k,i)=>
+    '<div class="cflt '+k.sev+'" data-i="'+i+'">'
+    +'<div class="chead"><span class="cico">'+(k.sev==='confirmed'?'⚠':'⚐')+'</span>'
+    +'<span class="ckey">'+esc(k.combo)+'</span>'
+    +'<span class="ctier">'+(k.sev==='confirmed'?'Confirmed':'Possible')+'</span></div>'
+    +'<div class="cctx">'+esc(GAME.ctxLabel(k.ctx))+'</div>'
+    +k.members.map(r=>'<div class="ccmd" title="'+esc(GAME.recName(r))+'">'+esc(GAME.recName(r))+'</div>').join('')
+    +(k.civs?('<div class="ccivs">affects '+k.civs.length+' civ'+(k.civs.length>1?'s':'')+'</div>'):'')
+    +'</div>'
+  ).join('')+'</div>';
+  el.innerHTML=html;
+  [...el.querySelectorAll('.cflt')].forEach(card=>{
+    const k=conflictClusters[+card.dataset.i];
+    card.onmouseenter=()=>hoverRec(k.members[0]);   // preview the clashing key on the keyboard
+    card.onmouseleave=clearHover;
+    card.onclick=()=>onKeyClick('k'+k.code);        // pin the key → filters the command list to it
+  });
+}
+
+// ---- on-screen keyboard ----
+const KB_MAIN=[
+ [{l:'Esc',vk:27},{gap:1},{l:'F1',vk:112},{l:'F2',vk:113},{l:'F3',vk:114},{l:'F4',vk:115},{gap:.5},{l:'F5',vk:116},{l:'F6',vk:117},{l:'F7',vk:118},{l:'F8',vk:119},{gap:.5},{l:'F9',vk:120},{l:'F10',vk:121},{l:'F11',vk:122},{l:'F12',vk:123}],
+ [{l:'`',vk:192},{l:'1',vk:49},{l:'2',vk:50},{l:'3',vk:51},{l:'4',vk:52},{l:'5',vk:53},{l:'6',vk:54},{l:'7',vk:55},{l:'8',vk:56},{l:'9',vk:57},{l:'0',vk:48},{l:'-',vk:189},{l:'=',vk:187},{l:'Back',vk:8,w:2}],
+ [{l:'Tab',vk:9,w:1.5},{l:'Q',vk:81},{l:'W',vk:87},{l:'E',vk:69},{l:'R',vk:82},{l:'T',vk:84},{l:'Y',vk:89},{l:'U',vk:85},{l:'I',vk:73},{l:'O',vk:79},{l:'P',vk:80},{l:'[',vk:219},{l:']',vk:221},{l:'\\',vk:220,w:1.5}],
+ [{l:'Caps',vk:20,w:1.75},{l:'A',vk:65},{l:'S',vk:83},{l:'D',vk:68},{l:'F',vk:70},{l:'G',vk:71},{l:'H',vk:72},{l:'J',vk:74},{l:'K',vk:75},{l:'L',vk:76},{l:';',vk:186},{l:"'",vk:222},{l:'Enter',vk:13,w:2.25}],
+ [{l:'Shift',mod:'shift',w:2.25},{l:'Z',vk:90},{l:'X',vk:88},{l:'C',vk:67},{l:'V',vk:86},{l:'B',vk:66},{l:'N',vk:78},{l:'M',vk:77},{l:',',vk:188},{l:'.',vk:190},{l:'/',vk:191},{l:'Shift',mod:'shift',w:2.75}],
+ [{l:'Ctrl',mod:'ctrl',w:1.4},{l:'Win',vk:91,w:1.2},{l:'Alt',mod:'alt',w:1.4},{l:'Space',vk:32,w:6},{l:'Alt',mod:'alt',w:1.4},{l:'Win',vk:92,w:1.2},{l:'Menu',vk:93,w:1.2},{l:'Ctrl',mod:'ctrl',w:1.4}],
+];
+const KB_NAV=[
+ [{l:'Ins',vk:45},{l:'Home',vk:36},{l:'PgUp',vk:33}],
+ [{l:'Del',vk:46},{l:'End',vk:35},{l:'PgDn',vk:34}],
+ [{blank:1},{l:'↑',vk:38},{blank:1}],
+ [{l:'←',vk:37},{l:'↓',vk:40},{l:'→',vk:39}],
+];
+const KB_NUM=[
+ [{l:'Num',vk:144},{l:'/',vk:111},{l:'*',vk:106},{l:'-',vk:109}],
+ [{l:'7',vk:103},{l:'8',vk:104},{l:'9',vk:105},{l:'+',vk:107}],
+ [{l:'4',vk:100},{l:'5',vk:101},{l:'6',vk:102},{blank:1}],
+ [{l:'1',vk:97},{l:'2',vk:98},{l:'3',vk:99},{l:'Ent',vk:13}],
+ [{l:'0',vk:96,w:2},{l:'.',vk:110},{blank:1}],
+];
+function makeKey(spec){
+  if(spec.gap){ const s=document.createElement('div'); s.style.width=(spec.gap*38)+'px'; return s; }
+  const el=document.createElement('div');
+  el.className='kbkey'+(spec.blank?' kbblank':'');
+  const w=spec.w||1; el.style.width=(w*34+(w-1)*4)+'px';
+  if(spec.blank) return el;
+  const disp=keyDisplay(spec);
+  el.innerHTML='<span class="lbl"></span>';
+  el.querySelector('.lbl').textContent=disp.label;
+  const id=(disp.vk!==undefined)?('k'+disp.vk):('m'+spec.mod);
+  (keyEls[id]=keyEls[id]||[]).push(el);
+  el.onclick=(ev)=>onKeyClick(id, ev);
+  el.onmouseenter=()=>hoverKey(id);    // hovering a key highlights its commands in the list
+  el.onmouseleave=clearHover;
+  return el;
+}
+// mouse visual: the 5 bindable mouse inputs (codes 251-255) plus L/R for shape.
+function makeMouse(){
+  const wrap=document.createElement('div'); wrap.className='kbsec mousewrap';
+  const cap=document.createElement('div'); cap.className='mousecap'; cap.textContent='Mouse';
+  const mouse=document.createElement('div'); mouse.className='mouse';
+  const body=document.createElement('div'); body.className='mbody';
+  const ml=document.createElement('div'); ml.className='mface ml'; ml.textContent='L';
+  const mr=document.createElement('div'); mr.className='mface mr'; mr.textContent='R';
+  mouse.append(body, ml, mr);
+  const mk=(vk,label,cls,title)=>{
+    const el=document.createElement('div'); el.className='kbkey mbtn '+cls;
+    el.innerHTML='<span class="lbl"></span>'; el.querySelector('.lbl').textContent=label; el.title=title;
+    const id='k'+vk; (keyEls[id]=keyEls[id]||[]).push(el);
+    el.onclick=(ev)=>onKeyClick(id, ev);
+    el.onmouseenter=()=>hoverKey(id);
+    el.onmouseleave=clearHover;
+    mouse.appendChild(el);
+  };
+  GAME.input.mouseButtons.forEach(b=>mk(b.vk, b.label, b.cls, b.title));
+  wrap.append(cap, mouse);
+  return wrap;
+}
+function renderKeyboard(){
+  keyEls={};
+  const kb=document.getElementById('kb'); kb.innerHTML='';
+  [KB_MAIN,KB_NAV,KB_NUM].forEach(sec=>{
+    const secEl=document.createElement('div'); secEl.className='kbsec';
+    sec.forEach(row=>{
+      const r=document.createElement('div'); r.className='kbrow';
+      row.forEach(spec=>r.appendChild(makeKey(spec)));
+      secEl.appendChild(r);
+    });
+    kb.appendChild(secEl);
+  });
+  kb.appendChild(makeMouse());
+}
+function refreshKeyboard(){
+  document.querySelectorAll('.kbkey').forEach(el=>{ el.classList.remove('has'); el.style.removeProperty('--shade'); });
+  let maxn=1;
+  recByKey.forEach((recs,k)=>{ if(typeof k==='number' && recs.length>maxn) maxn=recs.length; });
+  recByKey.forEach((recs,k)=>{
+    const isMod=(typeof k!=='number');
+    const id=isMod?('m'+k):('k'+k);
+    let shade=.45;
+    if(shadeByCount){
+      shade = isMod ? .5 : (maxn<=1 ? .5 : (0.16 + 0.64*(recs.length-1)/(maxn-1)));
+    }
+    (keyEls[id]||[]).forEach(el=>{ el.classList.add('has'); el.style.setProperty('--shade', shade.toFixed(3)); });
+  });
+  document.querySelectorAll('.kbkey.conflict,.kbkey.clash').forEach(el=>el.classList.remove('conflict','clash'));
+  keySev.forEach((sev,id)=>{ const cls=(sev==='confirmed')?'conflict':'clash';
+    (keyEls[id]||[]).forEach(el=>el.classList.add(cls)); });
+  updateConflictBadge();
+  renderConflictPanel();
+}
+function keyLabel(id){ const e=(keyEls[id]||[])[0]; return e?e.querySelector('.lbl').textContent:id; }
+
+// ---- highlighting (keyboard <-> list) ----
+function clearHighlight(){   // purely visual; does not touch the selectedGroup state
+  document.querySelectorAll('.kbkey.hl,.kbkey.hl-mod').forEach(el=>el.classList.remove('hl','hl-mod'));
+  document.querySelectorAll('.cmd.selcmd').forEach(el=>el.classList.remove('selcmd'));
+  document.querySelectorAll('.ghighlight.selgroup').forEach(el=>el.classList.remove('selgroup'));
+}
+// re-apply the selected group's key highlight + heading marker (after edits / re-renders)
+function applyGroupHighlight(){
+  if(!selectedGroup) return;
+  const g=groupedView.find(x=>x.name===selectedGroup);
+  if(!g){ selectedGroup=null; return; }          // group no longer exists (e.g. new file loaded)
+  g.recs.forEach(hlRec);
+  document.querySelectorAll('.ghighlight').forEach(el=>{
+    if(el.dataset.group===selectedGroup) el.classList.add('selgroup'); });
+}
+function hlRec(r){
+  const e=r.e;
+  if(e.code) (keyEls['k'+e.code]||[]).forEach(el=>el.classList.add('hl'));
+  if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-mod'));
+  if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-mod'));
+  if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-mod'));
+}
+function hoverRec(r){      // request 6: lighter preview shade
+  const e=r.e;
+  if(e.code) (keyEls['k'+e.code]||[]).forEach(el=>el.classList.add('hlh'));
+  if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-modh'));
+  if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-modh'));
+  if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-modh'));
+}
+// reverse of hoverRec: hovering a key highlights every list row bound to it (no filtering)
+function hoverKey(id){
+  const recs = id[0]==='k' ? recByKey.get(parseInt(id.slice(1))) : recByKey.get(id.slice(1));
+  if(!recs) return;
+  recs.forEach(r=>{ const el=cmdEls.get(r); if(el) el.classList.add('hlcmd'); });
+}
+function clearHover(){
+  document.querySelectorAll('.kbkey.hlh,.kbkey.hl-modh').forEach(el=>el.classList.remove('hlh','hl-modh'));
+  document.querySelectorAll('.cmd.hlcmd').forEach(el=>el.classList.remove('hlcmd'));
+}
+function onCommandClick(r,item){ selectedGroup=null; clearHighlight(); hlRec(r); item.classList.add('selcmd'); }
+function onGroupClick(group, el){
+  if(selectedGroup===group.name){ selectedGroup=null; clearHighlight(); return; }  // click again -> clear
+  selectedGroup=group.name; clearHighlight(); group.recs.forEach(hlRec);
+  if(el) el.classList.add('selgroup');
+}
+function onKeyClick(id, ev){
+  // during a rebind capture, clicking a key assigns it (the only way to bind a
+  // mouse button, since mouse presses can't be captured via keydown)
+  if(capture){
+    if(id[0]==='m'){                       // a modifier key -> toggle it into the armed set
+      const m=id.slice(1); capture.mods[m]=capture.mods[m]?0:1;
+      capture.btn.textContent=capturePromptText(); updateArmedVisuals();
+      return;
+    }
+    commitCapture(parseInt(id.slice(1)), ev);   // a real key (incl. mouse) -> assign it
+    return;
+  }
+  if(selectedKey===id){ clearKeyFilter(); return; }
+  selectedKey=id;
+  selectedGroup=null;
+  document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel'));
+  (keyEls[id]||[]).forEach(el=>el.classList.add('sel'));
+  clearHighlight();
+  renderList();
+}
+function clearKeyFilter(){
+  selectedKey=null;
+  document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel'));
+  renderList();
+}
+function keyFilterSet(){
+  if(!selectedKey) return null;
+  const k=selectedKey[0]==='k'?parseInt(selectedKey.slice(1)):selectedKey.slice(1);
+  return new Set(recByKey.get(k)||[]);
+}
+function esc(s){ return s.replace(/[&<>"]/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function updateBanner(){
+  const b=document.getElementById('kbbanner');
+  const ftext=document.getElementById('search').value.trim();
+  const parts=[];
+  if(selectedKey){ const kset=keyFilterSet(); parts.push('key <b>'+keyLabel(selectedKey)+'</b> ('+(kset?kset.size:0)+')'); }
+  if(ftext) parts.push('text <b>"'+esc(ftext)+'"</b>');
+  const active=parts.length>0;
+  b.classList.toggle('active', active);
+  if(!active){ b.textContent=''; return; }
+  b.innerHTML='Filtered by '+parts.join(' + ')+' ';
+  const x=document.createElement('button'); x.textContent='clear'; x.onclick=clearAllFilters;
+  b.appendChild(x);
+}
+function clearAllFilters(){
+  selectedKey=null;
+  const s=document.getElementById('search'); s.value=''; s.classList.remove('has-text');
+  document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel'));
+  renderList();
+}
+
+// ---- collapse (request 3) ----
+function toggleCollapse(name){ if(collapsed.has(name)) collapsed.delete(name); else collapsed.add(name); renderList(); }
+function collapseAll(){ groupedView.forEach(g=>collapsed.add(g.name)); renderList(); }
+function expandAll(){ collapsed.clear(); renderList(); }
+
+// ---- command list (multi-column, request 4) ----
+function makeCmd(r){
+  const e=r.e;
+  const item=document.createElement('div'); item.className='cmd';
+  cmdEls.set(r, item);                 // so a key hover can find and highlight this row
+  item.onmouseenter=()=>hoverRec(r);   // hovering anywhere on the row previews its keys
+  item.onmouseleave=clearHover;
+  const nm=document.createElement('div'); nm.className='nm';
+  nm.textContent=GAME.recName(r); nm.title=GAME.recName(r)+'  (#'+r.id+')';
+  nm.onclick=()=>onCommandClick(r,item);
+  const btn=document.createElement('button');
+  btn.className='keybtn'+(e.code?'':' unbound');
+  btn.textContent=comboLabel(e);
+  btn.title='Left-click to rebind, then press any key. Right-click to unbind.';
+  btn.onclick=()=>{ if(capture && capture.btn===btn) cancelCapture(); else startCapture(r,btn); };
+  btn.oncontextmenu=(ev)=>{ ev.preventDefault(); unbind(r,btn); };
+  const sev=recSev.get(r);
+  if(sev){
+    item.classList.add('sev-'+sev);
+    const w=document.createElement('span'); w.className='warn sev-'+sev;
+    w.textContent = sev==='confirmed'?'⚠':(sev==='possible'?'⚐':'ⓘ');
+    w.title=conflictTip(r); item.appendChild(w);
+  }
+  item.append(nm,btn);
+  return item;
+}
+function columnCount(content){
+  const w=content.clientWidth || (window.innerWidth-36);
+  const COLW=320, GAP=26;
+  return Math.max(1, Math.floor((w+GAP)/(COLW+GAP)));
+}
+// contiguous, order-preserving split of weights into k columns that minimises
+// the heaviest column (classic linear-partition DP) -> roughly even columns.
+function balancedColumns(weights, k){
+  const m=weights.length;
+  if(k<=1 || m===0) return [[0,m]];
+  if(k>=m) return weights.map((_,i)=>[i,i+1]);
+  const pre=[0]; for(const w of weights) pre.push(pre[pre.length-1]+w);
+  const cost=Array.from({length:m+1},()=>new Array(k+1).fill(Infinity));
+  const div=Array.from({length:m+1},()=>new Array(k+1).fill(0));
+  for(let i=0;i<=m;i++) cost[i][1]=pre[i];
+  for(let j=2;j<=k;j++)
+    for(let i=1;i<=m;i++)
+      for(let p=1;p<=i;p++){
+        const c=Math.max(cost[p][j-1], pre[i]-pre[p]);
+        if(c<cost[i][j]){ cost[i][j]=c; div[i][j]=p; }
+      }
+  const bounds=[]; let i=m,j=k;
+  while(j>1){ const p=div[i][j]; bounds.unshift([p,i]); i=p; j--; }
+  bounds.unshift([0,i]);
+  return bounds;
+}
+function buildGroupEl(v, forceOpen){
+  const group=v.group, recs=v.recs;
+  const open=forceOpen || !collapsed.has(group.name);
+  const grp=document.createElement('div'); grp.className='grp'+(open?'':' collapsed');
+  const h=document.createElement('h2');
+  // collapse/expand button: caret + the group name
+  const collapseBtn=document.createElement('button'); collapseBtn.className='gcollapse';
+  collapseBtn.title='Collapse / expand this group';
+  const caret=document.createElement('span'); caret.className='caret';
+  caret.innerHTML=open?'&#9662;':'&#9656;';   // ▾ / ▸
+  const gname=document.createElement('span'); gname.className='gname'; gname.textContent=group.name;
+  collapseBtn.append(caret,gname);
+  collapseBtn.onclick=()=>toggleCollapse(group.name);
+  // highlight button: fills the rest of the heading, holds the eye icon + key count
+  const hlBtn=document.createElement('button');
+  hlBtn.className='ghighlight'+(selectedGroup===group.name?' selgroup':'');
+  hlBtn.dataset.group=group.name;
+  hlBtn.title='Highlight this group’s keys (click again to clear)';
+  const eye=document.createElement('span'); eye.className='geye'; eye.textContent='👁';
+  const pill=document.createElement('span'); pill.className='pill'; pill.textContent=recs.length;
+  hlBtn.append(eye,pill);
+  hlBtn.onclick=()=>onGroupClick(group, hlBtn);
+  h.append(collapseBtn,hlBtn);
+  grp.appendChild(h);
+  if(open){
+    const grid=document.createElement('div'); grid.className='cmdgrid';
+    recs.forEach(r=>grid.appendChild(makeCmd(r)));
+    grp.appendChild(grid);
+  }
+  return grp;
+}
+function renderList(){   // wrapper: keep scroll position so edits don't jump to top
+  const y=window.scrollY;
+  _renderList();
+  window.scrollTo(0, y);
+}
+function _renderList(){
+  const content=document.getElementById('content'); content.innerHTML='';
+  cmdEls=new Map();   // rows are rebuilt below; drop stale rec->element mappings
+  clearHover();   // rebuilding the list destroys any hovered row, so its mouseleave
+                  // never fires — drop its now-orphaned keyboard preview here
+  updateBanner();
+  if(!state.base && !state.profile) return;
+  const filter=document.getElementById('search').value.trim().toLowerCase();
+  const kset=keyFilterSet();
+  const forceOpen=!!filter || !!selectedKey || showConflictsOnly;
+  const vis=[];
+  groupedView.forEach(group=>{
+    const recs=group.recs.filter(r=>
+      (!filter||GAME.recName(r).toLowerCase().includes(filter)) && (!kset||kset.has(r))
+      && (!showConflictsOnly || recSev.has(r)));
+    if(recs.length) vis.push({group:group, recs:recs});
+  });
+  vis.sort((a,b)=>a.group.name.localeCompare(b.group.name));   // alphabetical headings
+  if(!vis.length){ const d=document.createElement('div'); d.className='empty';
+    d.textContent=(selectedKey||filter||showConflictsOnly)?'No commands match the current filter.':'No hotkeys.';
+    content.appendChild(d); return; }
+  // Weight by each group's FULL command count (ignore collapse state) so the
+  // column assignment stays fixed: collapsing a group just shrinks it in place
+  // instead of repartitioning and shuffling other groups between columns.
+  const HEADER_W=2;
+  const weights=vis.map(v=>HEADER_W + v.recs.length);
+  const k=Math.min(columnCount(content), vis.length);
+  balancedColumns(weights, k).forEach(([s,e])=>{
+    const col=document.createElement('div'); col.className='col';
+    for(let i=s;i<e;i++) col.appendChild(buildGroupEl(vis[i], forceOpen));
+    content.appendChild(col);
+  });
+}
+let _resizeT=null;
+window.addEventListener('resize', ()=>{ clearTimeout(_resizeT);
+  _resizeT=setTimeout(()=>{ if(state.base||state.profile) renderList(); }, 120); });
+function afterEdit(){ indexKeys(); computeConflicts(); refreshKeyboard(); clearHighlight(); clearHover(); renderList(); applyGroupHighlight(); }
+
+// ---- rebind / unbind (each entry independent — no syncing) ----
+function startCapture(rec, btn){
+  cancelCapture();
+  capture={rec,btn,mods:{ctrl:0,alt:0,shift:0}};   // mods = click-armed modifiers
+  btn.classList.add('capturing');
+  btn.textContent='press a key…';
+  updateArmedVisuals();
+}
+function cancelCapture(){
+  if(capture){ capture.btn.classList.remove('capturing'); refreshBtn(capture.btn,capture.rec.e);
+    capture=null; updateArmedVisuals(); }
+}
+// label the rebind button with any armed modifiers, e.g. "Ctrl+Alt+ press a key…"
+function capturePromptText(){
+  const p=[]; if(capture.mods.ctrl)p.push('Ctrl'); if(capture.mods.alt)p.push('Alt'); if(capture.mods.shift)p.push('Shift');
+  return (p.length?p.join('+')+'+ ':'')+'press a key…';
+}
+// mirror the armed modifiers onto the on-screen modifier keys
+function updateArmedVisuals(){
+  document.querySelectorAll('.kbkey.armed').forEach(el=>el.classList.remove('armed'));
+  if(!capture) return;
+  ['ctrl','alt','shift'].forEach(m=>{ if(capture.mods[m]) (keyEls['m'+m]||[]).forEach(el=>el.classList.add('armed')); });
+}
+// commit a binding: combine the click-armed modifiers with any physically-held ones
+function commitCapture(code, ev){
+  applyBinding(capture.rec, code,
+    capture.mods.ctrl ||(ev&&ev.ctrlKey ?1:0),
+    capture.mods.alt  ||(ev&&ev.altKey  ?1:0),
+    capture.mods.shift||(ev&&ev.shiftKey?1:0));
+  capture.btn.classList.remove('capturing'); capture=null; updateArmedVisuals(); afterEdit();
+}
+function refreshBtn(btn,e){
+  btn.textContent=comboLabel(e);
+  btn.classList.toggle('unbound', !e.code);
+}
+function applyBinding(rec, code, ctrl, alt, shift){
+  const e=rec.e; e.code=code; e.ctrl=ctrl; e.alt=alt; e.shift=shift;
+}
+function unbind(rec,btn){
+  if(capture) cancelCapture();
+  applyBinding(rec,0,0,0,0);
+  afterEdit();
+}
+// while capturing, ANY key binds (Esc/Delete/etc. included) — only modifiers wait
+window.addEventListener('keydown', ev=>{
+  if(!capture) return;
+  ev.preventDefault();
+  const kc=GECKO[ev.keyCode]||ev.keyCode;  // normalise Firefox ;=- codes
+  if(MODS[kc]){                             // a bare modifier never commits; Ctrl/Shift arm it
+    const m = kc===17?'ctrl' : kc===16?'shift' : null;   // 18=Alt skipped (triggers the browser menu)
+    if(m && !capture.mods[m]){ capture.mods[m]=1; capture.btn.textContent=capturePromptText(); updateArmedVisuals(); }
+    return;
+  }
+  commitCapture(kc, ev);                    // base key + armed/held modifiers
+}, true);
+// left-click off the rebind button / keyboard cancels an in-progress capture
+window.addEventListener('click', ev=>{
+  if(!capture) return;
+  const t=ev.target;
+  if(t.classList && t.classList.contains('keybtn')) return;   // the rebind button itself
+  if(t.closest && t.closest('.kbkey')) return;                // a key -> onKeyClick assigns it
+  cancelCapture();
+}, true);
+
+// ---- load ----
+async function onFiles(fileList){
+  const files=[...fileList];
+  if(!files.length) return;
+  setHint('parsing…');
+  try{
+    // merge — files may be loaded in separate picks (they live in different folders)
+    for(const f of files){
+      const info=GAME.codec.parse(await GAME.codec.inflate(new Uint8Array(await f.arrayBuffer())));
+      const base=f.name.split(/[\\/]/).pop().replace(/\.[^.]*$/,'');
+      if(info.kind==='shared'){ state.profile=info;
+        if(base.toLowerCase()!=='base') state.name=base; }
+      else { state.base=info; }
+    }
+  }catch(e){ setHint('<span class="err">Could not parse: '+(e&&e.message||e)+'</span>'); return; }
+  if(state.name && state.name!=='Hotkeys') document.getElementById('pname').value=state.name;
+  document.getElementById('files').value='';   // allow re-picking the same file
+  // interpret the uploaded file as whatever layout the toggle is currently set to
+  // (don't force QWERTY) — set the toggle before loading a Dvorak profile.
+  buildModel();
+  showUI();
+  refreshKeyboard();
+  renderList();
+}
+function updateFileStatus(){
+  const profLabel = (state.name && state.name!=='Hotkeys') ? state.name+'.hkp'
+                                                           : 'top-level &lt;Name&gt;.hkp';
+  const prof = state.profile
+    ? '<span class="chip ok">✓ '+(state.name||'profile')+'.hkp</span>'
+    : '<span class="chip need">⬆ load '+profLabel+'</span>';
+  const base = state.base
+    ? '<span class="chip ok">✓ Base.hkp</span>'
+    : '<span class="chip need">⬆ load Base.hkp (in &lt;Name&gt;/ subfolder)</span>';
+  document.getElementById('fstatus').innerHTML = prof + base;
+}
+function showUI(){
+  document.getElementById('placeholder').style.display='none';
+  document.getElementById('kbwrap').style.display='';
+  document.getElementById('pname').style.display='';
+  document.getElementById('save').disabled=false;
+  updateFileStatus();
+  setHint('Loaded '+allRecs.length+' commands ('
+    +[state.base?'Base.hkp':null, state.profile?'profile.hkp':null].filter(Boolean).join(' + ')+').');
+}
+function setHint(html){ document.getElementById('hint').innerHTML=html; }
+
+// ---- layout toggle: convert keybinds AND relabel the keyboard ----
+// Both the binding codes and the key labels permute the same way, so the set of
+// highlighted *physical* keys is identical before and after toggling.
+function syncLayoutToggle(){
+  const cb=document.getElementById('layoutToggle'); if(cb) cb.checked=(layout==='dvorak');
+  const q=document.getElementById('ltQ'), d=document.getElementById('ltD');
+  if(q) q.classList.toggle('lt-active', layout==='qwerty');
+  if(d) d.classList.toggle('lt-active', layout==='dvorak');
+}
+function setLayout(target){
+  if(target===layout) return;
+  const m=buildVkMap(target==='qwerty');   // to QWERTY = reverse (Dvorak->QWERTY)
+  let n=0;
+  GAME.forEachEntry(e=>{ if(e.id>0 && m[e.code]!==undefined){ e.code=m[e.code]; n++; } });
+  layout=target;
+  selectedKey=null;
+  syncLayoutToggle();
+  renderKeyboard();   // relabel keys for the new layout
+  afterEdit();        // re-index by new codes, re-highlight, re-list
+  setHint('Switched to '+(target==='dvorak'?'Dvorak':'QWERTY')
+    +' — '+n+' keybinds converted and the keyboard relabelled.');
+}
+
+// ---- save ----
+async function save(){
+  state.name=document.getElementById('pname').value.trim()||'Hotkeys';
+  let blob;
+  try{ blob=await GAME.codec.buildZip(state.name, state.profile, state.base); }
+  catch(e){ setHint('<span class="err">build failed: '+(e&&e.message||e)+'</span>'); return; }
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(blob); a.download=state.name+'.zip';
+  document.body.appendChild(a); a.click(); a.remove();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+  setHint('Downloaded '+state.name+'.zip — extract into your profile folder ('
+    +state.name+'.hkp at the root, '+state.name+'/Base.hkp in the subfolder).');
+}
+
+// ===== active game module ========================================================
+// game_module_generator.py --build replaces the next line with games/aoe2/module.js
+// (the AoE2 codec, naming/grouping, conflict rules, and the GAME.* wiring).  It runs
+// before any rendering/loading below, so GAME.* is ready.  Served raw in dev (no
+// build) the page is intentionally inert -- use the built site/aoe2/index.html.
+// AoE2:DE game module -- the per-game half of the multi-game seam.
+//
+// page.html is the generic engine/UI shell; everything AoE2-specific (the .hkp
+// codec, command naming/grouping, and the civ-aware conflict rules) lives here and
+// is wired into the engine through the GAMES.aoe2 / GAME interface at the bottom of
+// this file.  game_module_generator.py --build injects this file (and the json data)
+// into the shell to produce the self-contained site/aoe2/index.html.
+//
+// This code is injected inside the shell's main <script>, so it shares scope with the
+// engine: it may read engine globals (e.g. `state`), and the engine reaches AoE2 code
+// only through GAME.* (assembled below).  Keep it byte-for-byte in step with the
+// Python oracle hkp_parser.py for the codec.
+
+// ===== .hkp parser: ported from hkp_parser.py, verified byte-exact vs Python =====
+// (inflate/deflate via native deflate-raw streams; struct via DataView; STORE zip)
+const hkp = (() => {
+const enc = s => Uint8Array.from(s, c => c.charCodeAt(0));
+
+const GROUP_HEADER_MAGIC = 0x00100a60;
+const S = {
+  BASE_BEGIN: enc('baseHotkeysBegin'),
+  BASE_END: enc('baseHotkeysEnd'),
+  SHARED_BEGIN: enc('sharedHotkeyGroupsBegin'),
+  SHARED_END: enc('sharedHotkeyGroupsEnd'),
+  HANDLER_BEGIN: enc('HandlerBaseGroupBegin'),
+  HANDLER_END: enc('HandlerBaseGroupEnd'),
+  GUARD: enc('GroupHeaderGuard'),
+  ADD_BEGIN: enc('additionalHotkeysBegin'),
+  ADD_END: enc('additionalHotkeysEnd'),
+  DET_BEGIN: enc('detachedHotkeyGroupsBegin'),
+  DET_END: enc('detachedHotkeyGroupsEnd'),
+  DG_BEGIN: enc('detachedHotkeysGroupBegin'),
+  DG_END: enc('detachedHotkeysGroupEnd'),
+};
+const SECTIONS = [
+  [enc('allUnitCommandHotkeysBegin'), enc('allUnitCommandHotkeysEnd')],
+  [enc('allGameCommandHotkeysBegin'), enc('allGameCommandHotkeysEnd')],
+  [enc('allCycleCommandHotkeysBegin'), enc('allCycleCommandHotkeysEnd')],
+];
+
+class ParseError extends Error {}
+
+class Reader {
+  constructor(data) {
+    this.data = data;
+    this.dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+    this.pos = 0;
+  }
+  u32() { const v = this.dv.getUint32(this.pos, true); this.pos += 4; return v >>> 0; }
+  f32() { const v = this.dv.getFloat32(this.pos, true); this.pos += 4; return v; }
+  peek(lit) {
+    if (this.pos + lit.length > this.data.length) return false;
+    for (let i = 0; i < lit.length; i++) if (this.data[this.pos + i] !== lit[i]) return false;
+    return true;
+  }
+  lit(l) {
+    if (!this.peek(l)) throw new ParseError('expected ' + String.fromCharCode(...l) + ' at offset ' + this.pos);
+    this.pos += l.length;
+  }
+  entry() {
+    const code = this.dv.getUint32(this.pos, true);
+    const sid = this.dv.getInt32(this.pos + 4, true);
+    const ctrl = this.data[this.pos + 8], alt = this.data[this.pos + 9],
+          shift = this.data[this.pos + 10], pad = this.data[this.pos + 11];
+    this.pos += 12;
+    return { code: code >>> 0, id: sid, ctrl, alt, shift, pad };
+  }
+  wrapped_entry() {
+    this.lit(S.HANDLER_BEGIN);
+    if (this.u32() !== GROUP_HEADER_MAGIC) throw new ParseError('bad group header magic at ' + (this.pos - 4));
+    this.lit(S.GUARD);
+    const e = this.entry();
+    this.lit(S.HANDLER_END);
+    return e;
+  }
+  menu(wrapped) {
+    const count = this.u32();
+    if (count > 100000) throw new ParseError('implausible count ' + count + ' at ' + (this.pos - 4));
+    const out = [];
+    for (let i = 0; i < count; i++) out.push(wrapped ? this.wrapped_entry() : this.entry());
+    return out;
+  }
+  eof() { return this.pos === this.data.length; }
+}
+
+function parse_shared(r, wrapped) {
+  const num = r.u32();
+  if (wrapped) { r.lit(S.BASE_BEGIN); r.lit(S.SHARED_BEGIN); }
+  const menus = [];
+  for (let i = 0; i < num; i++) menus.push(r.menu(wrapped));
+  let empty = 0;
+  if (wrapped) {
+    while (!r.peek(S.SHARED_END)) { if (r.u32() !== 0) throw new ParseError('expected empty menu slot at ' + (r.pos - 4)); empty++; }
+    r.lit(S.SHARED_END); r.lit(S.BASE_END);
+  } else {
+    while (!r.eof()) { if (r.u32() !== 0) throw new ParseError('expected empty menu slot at ' + (r.pos - 4)); empty++; }
+  }
+  return { kind: 'shared', menus, empty_slots: empty };
+}
+
+function parse_base(r, wrapped) {
+  const sections = [];
+  if (wrapped) {
+    r.lit(S.ADD_BEGIN);
+    for (const [b, e] of SECTIONS) { r.lit(b); sections.push(r.menu(true)); r.lit(e); }
+    r.lit(S.DET_BEGIN);
+  } else {
+    for (let i = 0; i < SECTIONS.length; i++) sections.push(r.menu(false));
+  }
+  const num = r.u32();
+  const groups = [];
+  for (let i = 0; i < num; i++) {
+    if (wrapped) {
+      const count = r.u32();
+      r.lit(S.DG_BEGIN);
+      const g = [];
+      for (let j = 0; j < count; j++) g.push(r.wrapped_entry());
+      r.lit(S.DG_END);
+      groups.push(g);
+    } else {
+      groups.push(r.menu(false));
+    }
+  }
+  if (wrapped) { r.lit(S.DET_END); r.lit(S.ADD_END); }
+  return {
+    kind: 'base',
+    unit_commands: sections[0], game_commands: sections[1], cycle_commands: sections[2],
+    detached_groups: groups,
+  };
+}
+
+function parse(data) {
+  let r = new Reader(data);
+  const version = r.f32();
+  let info;
+  if (r.peek(S.ADD_BEGIN)) {
+    info = parse_base(r, true);
+  } else if (data.length >= 8 + S.BASE_BEGIN.length &&
+             (() => { for (let i = 0; i < S.BASE_BEGIN.length; i++) if (data[8 + i] !== S.BASE_BEGIN[i]) return false; return true; })()) {
+    info = parse_shared(r, true);
+  } else {
+    info = null;
+    for (const fn of [parse_shared, parse_base]) {
+      r = new Reader(data); r.f32();
+      try { info = fn(r, false); break; }
+      catch (e) { if (e instanceof ParseError || e instanceof RangeError) info = null; else throw e; }
+    }
+    if (info === null) throw new ParseError('unrecognized .hkp layout');
+  }
+  if (!r.eof()) throw new ParseError('trailing data at offset ' + r.pos + ' of ' + r.data.length);
+  info.version = Math.round(version * 100) / 100;
+  info.wrapped = version >= 4.25;
+  return info;
+}
+
+// --- writing -----------------------------------------------------------
+function concat(arrs) {
+  let len = 0; for (const a of arrs) len += a.length;
+  const out = new Uint8Array(len);
+  let o = 0; for (const a of arrs) { out.set(a, o); o += a.length; }
+  return out;
+}
+function u32le(v) { const b = new Uint8Array(4); new DataView(b.buffer).setUint32(0, v >>> 0, true); return b; }
+function f32le(v) { const b = new Uint8Array(4); new DataView(b.buffer).setFloat32(0, v, true); return b; }
+function entryBytes(e) {
+  const b = new Uint8Array(12), dv = new DataView(b.buffer);
+  dv.setUint32(0, e.code >>> 0, true);
+  dv.setInt32(4, e.id | 0, true);
+  b[8] = e.ctrl & 255; b[9] = e.alt & 255; b[10] = e.shift & 255; b[11] = (e.pad || 0) & 255;
+  return b;
+}
+
+function unparse(info) {
+  const wrapped = info.wrapped;
+  const chunks = [f32le(info.version)];
+  const writeEntry = (e, w) => {
+    if (w) chunks.push(S.HANDLER_BEGIN, u32le(GROUP_HEADER_MAGIC), S.GUARD, entryBytes(e), S.HANDLER_END);
+    else chunks.push(entryBytes(e));
+  };
+  const writeMenu = (menu, w) => { chunks.push(u32le(menu.length)); for (const e of menu) writeEntry(e, w); };
+
+  if (info.kind === 'shared') {
+    chunks.push(u32le(info.menus.length));
+    if (wrapped) chunks.push(S.BASE_BEGIN, S.SHARED_BEGIN);
+    for (const m of info.menus) writeMenu(m, wrapped);
+    for (let i = 0; i < info.empty_slots; i++) chunks.push(u32le(0));
+    if (wrapped) chunks.push(S.SHARED_END, S.BASE_END);
+  } else {
+    const sections = [info.unit_commands, info.game_commands, info.cycle_commands];
+    if (wrapped) {
+      chunks.push(S.ADD_BEGIN);
+      for (let i = 0; i < SECTIONS.length; i++) { chunks.push(SECTIONS[i][0]); writeMenu(sections[i], true); chunks.push(SECTIONS[i][1]); }
+      chunks.push(S.DET_BEGIN, u32le(info.detached_groups.length));
+      for (const g of info.detached_groups) {
+        chunks.push(u32le(g.length), S.DG_BEGIN);
+        for (const e of g) writeEntry(e, true);
+        chunks.push(S.DG_END);
+      }
+      chunks.push(S.DET_END, S.ADD_END);
+    } else {
+      for (const m of sections) writeMenu(m, false);
+      chunks.push(u32le(info.detached_groups.length));
+      for (const g of info.detached_groups) writeMenu(g, false);
+    }
+  }
+  return concat(chunks);
+}
+
+// --- raw deflate (native browser/Node streams) -------------------------
+async function inflateRaw(u8) {
+  const ds = new DecompressionStream('deflate-raw');
+  const ab = await new Response(new Blob([u8]).stream().pipeThrough(ds)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+async function deflateRaw(u8) {
+  const cs = new CompressionStream('deflate-raw');
+  const ab = await new Response(new Blob([u8]).stream().pipeThrough(cs)).arrayBuffer();
+  return new Uint8Array(ab);
+}
+
+// --- zip (STORE; .hkp payload is already deflate-compressed) ------------
+const CRC_TABLE = (() => {
+  const t = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1); t[n] = c >>> 0; }
+  return t;
+})();
+function crc32(u8) {
+  let c = 0xFFFFFFFF;
+  for (let i = 0; i < u8.length; i++) c = CRC_TABLE[(c ^ u8[i]) & 0xFF] ^ (c >>> 8);
+  return (c ^ 0xFFFFFFFF) >>> 0;
+}
+function u16le(v) { const b = new Uint8Array(2); new DataView(b.buffer).setUint16(0, v, true); return b; }
+function zipStore(entries) {
+  const te = new TextEncoder();
+  const parts = [], central = [];
+  let offset = 0;
+  for (const [nm, data] of entries) {
+    const name = te.encode(nm);
+    const crc = crc32(data);
+    const lh = concat([u32le(0x04034b50), u16le(20), u16le(0x0800), u16le(0), u16le(0), u16le(0),
+      u32le(crc), u32le(data.length), u32le(data.length), u16le(name.length), u16le(0), name]);
+    parts.push(lh, data);
+    central.push(concat([u32le(0x02014b50), u16le(20), u16le(20), u16le(0x0800), u16le(0), u16le(0), u16le(0),
+      u32le(crc), u32le(data.length), u32le(data.length), u16le(name.length), u16le(0), u16le(0), u16le(0), u16le(0),
+      u32le(0), u32le(offset), name]));
+    offset += lh.length + data.length;
+  }
+  const cdStart = offset;
+  let cdSize = 0;
+  for (const c of central) { parts.push(c); cdSize += c.length; }
+  parts.push(concat([u32le(0x06054b50), u16le(0), u16le(0), u16le(entries.length), u16le(entries.length),
+    u32le(cdSize), u32le(cdStart), u16le(0)]));
+  return concat(parts);
+}
+async function buildZipBytes(name, profile, base) {
+  name = (name || 'Hotkeys').trim() || 'Hotkeys';
+  const entries = [];
+  if (profile) entries.push([name + '.hkp', await deflateRaw(unparse(profile))]);
+  if (base) entries.push([name + '/Base.hkp', await deflateRaw(unparse(base))]);
+  return zipStore(entries);
+}
+
+async function buildZip(name, profile, base) {
+  return new Blob([await buildZipBytes(name, profile, base)], { type: 'application/zip' });
+}
+return { parse, unparse, inflateRaw, deflateRaw, buildZipBytes, buildZip, crc32, ParseError };
+})();
+
+// ---- dataset (filled by GAME.setData from the inlined/ fetched json) ----
+let strings = {};            // hotkey string id -> display name
+let CIV = null;              // {idToCivs:{id:[civs]}, units:Set of unit ids}
+let cardData = null;         // our own {byId:{id:[group,ctx]}, chronicles, hidden} mapping
+let chronIds = new Set();    // command ids known to be Chronicles content
+let hiddenIds = new Set();   // command ids always hidden (e.g. the redundant generic "Build")
+function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
+
+// ---- command naming ----
+function baseName(id){ return strings[id] || ('id '+id); }
+function recName(r){
+  let n=baseName(r.id);
+  if(r.occ>1) n+=' ('+r.occ+')';          // alternate binding of the same command
+  return n;
+}
+
+// ---- file menus + editable records ----
+// ---- file menus ----
+function menusOf(info){
+  if(!info) return [];
+  if(info.kind==='shared') return info.menus.map((m,i)=>['Menu '+(i+1), m]);
+  const out=[['Unit commands',info.unit_commands],
+            ['Game commands',info.game_commands],
+            ['Cycle commands',info.cycle_commands]];
+  info.detached_groups.forEach((g,i)=>out.push(['Group '+(i+1), g]));
+  return out;
+}
+function forEachEntry(fn){
+  [state.base, state.profile].forEach(info=>
+    menusOf(info).forEach(([,menu])=>menu.forEach(fn)));
+}
+function buildEntries(){
+  const list=[]; const occ=new Map();
+  [['b',state.base],['p',state.profile]].forEach(([tag,info])=>{
+    menusOf(info).forEach(([label,menu])=>{
+      menu.forEach(e=>{
+        if(e.id<=0) return;
+        const n=(occ.get(e.id)||0)+1; occ.set(e.id,n);
+        list.push({e:e, id:e.id, occ:n, src:tag+'|'+label,
+                   chron: chronIds.has(e.id) || isChronName(strings[e.id]),
+                   hidden: hiddenIds.has(e.id)});
+      });
+    });
+  });
+  return list;
+}
+const MENU_NAMES={'p|Menu 1':'Misc','p|Menu 2':'Game & Chat','p|Menu 3':'Idle Units',
+  'p|Menu 4':'Control Groups','p|Menu 5':'Camera','p|Menu 6':'Replay','p|Menu 7':'Unit Stances',
+  'p|Menu 8':'Zoom','p|Menu 9':'Gates'};
+// built-in fallback grouping, read from the file's own structure (merges into the
+// matching curated group names where they exist, e.g. newer "Select all X" cmds)
+function structureGroupName(r){
+  const s=r.src;
+  if(s==='b|Game commands') return 'Select Commands';
+  if(s==='b|Cycle commands') return 'Go-To Commands';
+  if(s==='b|Unit commands') return 'Unit Commands';
+  if(MENU_NAMES[s]) return MENU_NAMES[s];
+  return 'Other Commands';
+}
+// the real building/command-card name (our curated card_data), falling back to
+// the file's built-in section/menu name for globals and unlabelled entries
+function groupNameOf(r){
+  const e=cardData && cardData.byId && cardData.byId[r.id];
+  return e ? e[0] : structureGroupName(r);
+}
+
+// ---- civ-aware conflict rules ----
+// Command slots that are mutually exclusive by civ — a civ fields at most one, so they
+// can never both be active even in the same card. Used only where the civ dataset can't
+// express it (a generic "Unique X" slot has no real unit name to look up). By command id
+// (stable per game version).  [[explicit-mutex-vs-civ-data]]
+const MUTEX_GROUPS=[
+  [19053,19358],          // generic Unique Warships  <->  Thirisadai (Bengalis')
+  [19136,19330,19354],    // Go to  Donjon / Krepost / Mule Cart   — civ-exclusive buildings
+  [19137,19019,19159],    // Select all  Donjons / Kreposts / Mule Carts  — same
+  [19143,19060],          // Xolotl Warrior  <->  Scout Cavalry / Hussar  — civ-exclusive: the
+                          // Xolotl is trained only by American civs (no Scout line) from
+                          // captured/scenario Stables; Scout-line civs never field the Xolotl,
+                          // so the two never share a Stable card. (Xolotl has no civ node, so
+                          // the name-keyed civ dataset can't resolve this on its own.)
+];
+// Generic "unique" command slots that EVERY civ has on a card (Castle's unique unit + its
+// three unique techs). Their names are civ-generic, so the name-keyed civ dataset can't
+// resolve them (civsForId is null) and a same-card pair would fall through to a soft
+// 'possible'. But all civs always have all of them, so two on one combo definitely clash.
+// Same-card pairs among these are forced to 'confirmed'.  [[explicit-mutex-vs-civ-data]]
+const UNIVERSAL_SLOTS=new Set([
+  19080,   // Tech: Elite Unique Unit
+  19081,   // Tech: Unique Castle Technology
+  19082,   // Tech: Unique Imperial Technology
+  19322,   // Unique Unit (Castle)
+  19187,   // Unique Unit (Donjon)
+]);
+const mutexOf=new Map();
+MUTEX_GROUPS.forEach((g,i)=>g.forEach(id=>mutexOf.set(id,i)));
+function sameMutex(a,b){ return mutexOf.has(a) && mutexOf.get(a)===mutexOf.get(b); }
+// Pairs that are technically co-bindable but practically a non-issue: shown as an
+// informational note (override tier — blue ⓘ, no key ring, not counted as a clash) with
+// a custom message, instead of a civ "possible" flag.  [[explicit-mutex-vs-civ-data]]
+const NOTE_PAIRS=[
+  { a:19125, b:19070,     // Infantry Unique Units  vs  Eagle Warrior / Fire Lancer
+    msg:'Only clashes if you somehow field both at once — e.g. teamed with Italians '
+       +'(Condottiero) or via a conversion. No civ has both normally, so it usually '
+       +'doesn’t matter.' },
+];
+const noteOf=new Map();
+NOTE_PAIRS.forEach(p=>noteOf.set(Math.min(p.a,p.b)+'|'+Math.max(p.a,p.b), p.msg));
+function noteFor(a,b){ return noteOf.get(Math.min(a,b)+'|'+Math.max(a,b)) || null; }
+// Command ids that can never clash with anything — they live in their own isolated sub-mode,
+// not active at the same time as ordinary bindings. e.g. Remove Gather Point is only reachable
+// after Set Gather Point is pressed, so it's effectively its own group.  [[explicit-mutex-vs-civ-data]]
+const ISOLATED_IDS=new Set([
+  19121,   // Remove Gather Point (only usable once setting a gather point)
+]);
+// Civ availability is keyed by command id (the .hkp id), precomputed at regen time,
+// so the runtime needs no name matching.
+function civsForId(id){ return CIV ? (CIV.idToCivs[id]||null) : null; }
+function isUnitId(id){ return CIV ? CIV.units.has(id) : false; }
+// conflict context comes from card_data.byId[id][1] (G/R/U:type/B:tab/D:card/CAMP)
+function recContext(r){
+  const e=cardData && cardData.byId && cardData.byId[r.id];
+  return e ? e[1] : ('Z|'+r.src);     // unknown -> isolated (no conflicts)
+}
+// Decide if two same-combo commands clash, given their contexts.  Different unit
+// types / build tabs / building cards are mutually exclusive (no clash); 'any'
+// overlaps everything in its layer; same building card -> civ-availability check.
+function uTypesOverlap(ta, tb){
+  if(ta===tb) return true;
+  if(ta==='any'||tb==='any') return true;        // 'any' = every unit type
+  if(ta==='nonsiege') return tb!=='siege';       // every type except siege (e.g. Garrison)
+  if(tb==='nonsiege') return ta!=='siege';
+  return false;                                  // two distinct unit types never coexist
+}
+function ctxClassify(ra, rb){
+  if(ISOLATED_IDS.has(ra.id) || ISOLATED_IDS.has(rb.id)) return null;   // isolated sub-mode, never clashes
+  if(sameMutex(ra.id, rb.id)) return null;   // civ-exclusive alternative slots never clash
+  const note=noteFor(ra.id, rb.id);
+  if(note) return {sev:'override', note:note};   // edge-case caution, not a real conflict
+  const ca=recContext(ra), cb=recContext(rb);
+  if(ca==='G'&&cb==='G') return {sev:'confirmed'};
+  if(ca==='R'&&cb==='R') return {sev:'confirmed'};
+  if(ca==='R'||cb==='R') return null;
+  if(ca==='G'||cb==='G') return {sev:'override'};      // global shadowed by a card/selection
+  const la=ca[0], lb=cb[0];
+  if(la!==lb) return null;                              // different selection layers
+  const ta=ca.slice(2), tb=cb.slice(2);
+  if(la==='U') return uTypesOverlap(ta,tb) ? {sev:'confirmed'} : null;
+  if(la==='B'){                                               // villager build menu
+    if(ca!==cb) return null;                                  // eco vs mil tab — mutually exclusive
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // same tab -> civ check. Civ-exclusive
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);    // buildings (Feitoria/Settlement/Donjon/
+      if(!ov.length) return null;                             // Krepost/Mule Cart…) never coexist -> no
+      return {sev:'confirmed', civs:ov}; }                    // clash; Settlement replaces Mill/Lumber/Mining
+    return {sev:'confirmed'};                                 // can't civ-verify (universal/nav) -> flag
+  }
+  if(la==='T') return ca===cb ? {sev:'confirmed'} : null;     // garrisons/transports
+  if(la==='D'){
+    if(ta==='any'||tb==='any') return {sev:'confirmed'};      // a building-wide command
+    if(ta!==tb) return null;                                  // different building cards
+    if(UNIVERSAL_SLOTS.has(ra.id)&&UNIVERSAL_SLOTS.has(rb.id))
+      return {sev:'confirmed'};                               // every civ has these -> always clash
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // same card -> civ check
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);
+      if(!ov.length) return null;                             // civ-exclusive -> not a clash
+      return (isUnitId(ra.id)&&isUnitId(rb.id)) ? {sev:'confirmed',civs:ov} : {sev:'possible',civs:ov}; }
+    return {sev:'possible'};                                  // same card, can't civ-verify -> flag for review
+  }
+  return null;
+}
+// human-readable name for a conflict context code (G / R / U:type / B:tab / D:card / T:type)
+function ctxLabel(ctx){
+  if(!ctx) return '';
+  if(ctx==='G') return 'Global — active everywhere';
+  if(ctx==='R') return 'Replay controls';
+  if(ctx.indexOf(':')<0) return ctx[0]==='Z' ? 'Ungrouped command' : ctx;
+  const layer=ctx[0], rest=ctx.slice(2);
+  if(layer==='U') return 'Selected '+rest+' unit';
+  if(layer==='B') return 'Villager build menu — '+(rest==='eco'?'Economy':rest==='mil'?'Military':rest);
+  if(layer==='D') return rest+' — command card';
+  if(layer==='T') return 'Garrison / transport — '+rest;
+  return rest||ctx;
+}
+
+// ===== register this game + wire its implementations into the engine's GAME interface =====
+// Self-registers under its slug (the shell's GAMES starts empty); the engine then picks the
+// active GAME from window.GAME_DATA.game.
+GAMES.aoe2 = {
+  // game identity + the shell's game-specific copy (the engine's applyMeta() paints
+  // these into the header/empty-state so page.html carries no AoE2 text itself)
+  meta: {
+    name: 'AoE2:DE',
+    blurb: 'Works with AoE2:DE (build 177723).',
+    fileLabel: 'Load .hkp files',
+    fileAccept: '.hkp',
+    multiple: true,
+    hasChroniclesToggle: true,
+    pathHelpTitle: 'Where AoE2:DE hotkeys go (click for details)',
+    pathHelp:
+      '<p><b>To get started:</b> load the two files for your current hotkey layout/profile.</p>'
+      + '<p><b>Hotkey folder:</b> AoE2:DE hotkeys live in your profile folder at</p>'
+      + '<p><code>C:\\Users\\&lt;you&gt;\\Games\\Age of Empires 2 DE\\&lt;Steam ID&gt;\\profile</code></p>'
+      + '<p>Each profile is <b>two files</b> — <code>&lt;Name&gt;.hkp</code> at the profile root, '
+      + 'and <code>&lt;Name&gt;\\Base.hkp</code> inside a subfolder of the same name.</p>'
+      + '<p>The download will provide both files in that structure; extract them and then copy '
+      + 'them back to your profile folder (after backing up the profile and deleting it in game '
+      + 'if you play on through Steam).</p>',
+    placeholder:
+      'Load both files of a profile:<br>'
+      + '<code>&lt;Name&gt;.hkp</code> and that profile\'s <code>Base.hkp</code> '
+      + '(from <code>…/profile/&lt;Name&gt;/Base.hkp</code>).',
+    applyNote:
+      'Apply hotkeys by placing the files in your AoE2 profile folder. On Steam, delete the '
+      + 'hotkey layout in-game first so Steam removes its cloud copy.',
+  },
+  // file format: bytes <-> parsed doc, and download packaging
+  codec: { parse:hkp.parse, unparse:hkp.unparse, inflate:hkp.inflateRaw,
+           deflate:hkp.deflateRaw, buildZip:hkp.buildZip, buildZipBytes:hkp.buildZipBytes },
+  // game-specific input: extra VK labels + the on-screen mouse buttons
+  input: {
+    vkLabels: { 251:'Extra Btn 2', 252:'Extra Btn 1', 253:'Middle Btn',
+                254:'Wheel Down', 255:'Wheel Up' },
+    mouseButtons: [
+      { vk:255, label:'▲', cls:'m-wu',  title:'Wheel Up' },
+      { vk:253, label:'●', cls:'m-mid', title:'Middle Button' },
+      { vk:254, label:'▼', cls:'m-wd',  title:'Wheel Down' },
+      { vk:251, label:'5', cls:'m-x2',  title:'Extra Button 2 (forward)' },
+      { vk:252, label:'4', cls:'m-x1',  title:'Extra Button 1 (back)' },
+    ],
+  },
+  // dataset: load the inlined data into this module's lookups (strings/civ/card)
+  setData: function(d){
+    strings = d.strings || {};
+    CIV = { idToCivs:(d.civ&&d.civ.idToCivs)||{}, units:new Set((d.civ&&d.civ.units)||[]) };
+    cardData = d.card || null;
+    chronIds = new Set((d.card&&d.card.chronicles)||[]);
+    hiddenIds = new Set((d.card&&d.card.hidden)||[]);
+  },
+  bindings: buildEntries,        // parsed doc -> the engine's editable rec list
+  forEachEntry: forEachEntry,    // iterate raw entries (used by the layout remap)
+  groupOf: groupNameOf,          // display group heading for a rec
+  context: recContext,           // conflict-scope code for a rec
+  classify: ctxClassify,         // do two same-combo recs clash? -> tier | null
+  recName: recName,              // display name for a rec
+  baseName: baseName,            // display name for a command id
+  ctxLabel: ctxLabel,              // human-readable label for a conflict-context code
+};
+
+
+// The injected module has registered its slot in GAMES; pick the active game from the
+// inlined payload's id (falling back to the sole registered game when served without a
+// build, e.g. dev).  Everything below reaches the game only through GAME.*.
+GAME = GAMES[(window.GAME_DATA && window.GAME_DATA.game)] || GAMES[Object.keys(GAMES)[0]];
+
+// Paint the active game's copy (name, file labels, help text, empty-state) into the
+// shell.  page.html ships game-neutral; everything game-specific comes from GAME.meta.
+function applyMeta(){
+  const m=GAME.meta||{};
+  const sel=document.getElementById('gameSelect');
+  if(sel && m.name){ sel.innerHTML='<option></option>'; sel.firstChild.textContent=m.name; }
+  if(m.name) document.title='Hotkey Editor — '+m.name;
+  const txt=(id,val)=>{ const el=document.getElementById(id); if(el && val!=null) el.textContent=val; };
+  const html=(id,val)=>{ const el=document.getElementById(id); if(el && val!=null) el.innerHTML=val; };
+  txt('metaBlurb', m.blurb);
+  txt('fileLabelText', m.fileLabel);
+  const fi=document.getElementById('files');
+  if(fi){ if(m.fileAccept!=null) fi.accept=m.fileAccept; fi.multiple=!!m.multiple; }
+  const ph=document.getElementById('pathHelpBtn'); if(ph && m.pathHelpTitle) ph.title=m.pathHelpTitle;
+  html('pathHelpPop', m.pathHelp);
+  html('placeholder', m.placeholder);
+  html('applyNote', m.applyNote);
+}
+applyMeta();
+
+// ---- wire up ----
+document.getElementById('files').addEventListener('change', e=>onFiles(e.target.files));
+document.getElementById('search').addEventListener('input', e=>{
+  e.target.classList.toggle('has-text', !!e.target.value.trim());
+  if(selectedKey){ selectedKey=null;
+    document.querySelectorAll('.kbkey.sel').forEach(el=>el.classList.remove('sel')); }
+  renderList();
+});
+document.getElementById('shadeToggle').addEventListener('change', e=>{
+  shadeByCount=e.target.checked; refreshKeyboard();
+});
+document.getElementById('chronToggle').addEventListener('change', e=>{
+  hideChronicles=!e.target.checked; buildModel(); refreshKeyboard(); renderList();
+});
+document.getElementById('hideConflictsToggle').addEventListener('change', e=>{
+  // hides the panel + per-command conflict styling; the toolbar conflict badge stays
+  document.body.classList.toggle('hide-conflicts', e.target.checked);
+});
+document.getElementById('showInstructionsToggle').addEventListener('change', e=>{
+  document.body.classList.toggle('hide-instructions', !e.target.checked);   // checked = shown
+});
+// path-help "?" badge: click toggles an instant popup (the native tooltip is too slow)
+const pathHelpBtn=document.getElementById('pathHelpBtn'), pathHelpPop=document.getElementById('pathHelpPop');
+pathHelpBtn.addEventListener('click', e=>{ e.stopPropagation(); pathHelpPop.classList.toggle('open'); });
+document.addEventListener('click', e=>{ if(e.target!==pathHelpBtn && !pathHelpPop.contains(e.target)) pathHelpPop.classList.remove('open'); });
+document.getElementById('collapseAll').addEventListener('click', collapseAll);
+document.getElementById('expandAll').addEventListener('click', expandAll);
+document.getElementById('save').addEventListener('click', save);
+document.getElementById('layoutToggle').addEventListener('change', e=>setLayout(e.target.checked?'dvorak':'qwerty'));
+document.getElementById('pname').addEventListener('input', e=>{ state.name=e.target.value; updateFileStatus(); });
+renderKeyboard();
+// Browsers may restore form-control state across a reload, but our JS state always starts
+// at its defaults — so force every toggle back in sync with that default on load (and on
+// bfcache restore), otherwise a restored checkbox can disagree with the actual state (e.g.
+// the layout switch showing Dvorak while the keyboard loaded as QWERTY).
+function syncTogglesToState(){
+  const set=(id,checked)=>{ const el=document.getElementById(id); if(el) el.checked=checked; };
+  set('shadeToggle', shadeByCount);        // default on
+  set('chronToggle', !hideChronicles);     // default off (Chronicles hidden)
+  set('hideConflictsToggle', document.body.classList.contains('hide-conflicts'));
+  set('showInstructionsToggle', !document.body.classList.contains('hide-instructions'));  // default on
+  syncLayoutToggle();                      // matches the layout switch + labels to `layout`
+}
+syncTogglesToState();
+window.addEventListener('pageshow', syncTogglesToState);
+function applyData(d){
+  GAME.setData(d);   // module owns the data shape; engine just triggers the rebuild
+  dataReady=true;    // dataset applied -> conflict computation/badge/panel may run
+  if(state.base||state.profile){ buildModel(); computeConflicts(); refreshKeyboard(); renderList(); }
+  else updateConflictBadge();
+}
+function loadData(){
+  // Built site/<game>/index.html ships data inline as window.GAME_DATA = {game, data};
+  // dev (page.html served from the repo root, no build) fetches it from the game's data
+  // folder instead.  The dev path is AoE2-specific and only a convenience — built pages
+  // never hit it.
+  if(window.GAME_DATA){ applyData(window.GAME_DATA.data); return; }
+  const base = 'games/aoe2/data/';
+  Promise.all([
+    fetch(base+'strings.json').then(r=>r.json()),
+    fetch(base+'civ_data.json').then(r=>r.json()),
+    fetch(base+'card_data.json').then(r=>r.json())
+  ]).then(([s,c,cd])=>applyData({strings:s, civ:c, card:cd}))
+    .catch(()=>setHint('<span class="err">Could not load data files — serve the repo root with a local web server (so games/aoe2/data/ is reachable), or use the built site/aoe2/index.html.</span>'));
+}
+loadData();
+document.getElementById('conflictbadge').addEventListener('click', ()=>{
+  if(!recSev.size && !showConflictsOnly) return;
+  showConflictsOnly=!showConflictsOnly; updateConflictBadge(); renderList();
+});
+updateFileStatus();   // show "load X / load Y" from the start
+</script>
+</body>
+</html>
