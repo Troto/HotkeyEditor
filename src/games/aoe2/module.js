@@ -6,10 +6,13 @@
 // this file.  game_module_generator.py --build injects this file (and the json data)
 // into the shell to produce the self-contained site/aoe2/index.html.
 //
-// This code is injected inside the shell's main <script>, so it shares scope with the
-// engine: it may read engine globals (e.g. `state`), and the engine reaches AoE2 code
-// only through GAME.* (assembled below).  Keep it byte-for-byte in step with the
-// Python oracle hkp_parser.py for the codec.
+// This file is injected inside the shell's main <script> and wrapped in the IIFE below,
+// so its internals (the codec, dataset lookups, naming/grouping, conflict rules) stay
+// private instead of leaking into the page's global scope.  It reaches outward only to
+// read engine globals it needs (e.g. `state`) and to register itself as GAMES.aoe2; the
+// engine reaches AoE2 code only through GAME.* (assembled at the bottom).  Keep the codec
+// byte-for-byte in step with the Python oracle hkp_parser.py.
+(function () {
 
 // ===== .hkp parser: ported from hkp_parser.py, verified byte-exact vs Python =====
 // (inflate/deflate via native deflate-raw streams; struct via DataView; STORE zip)
@@ -512,3 +515,5 @@ GAMES.aoe2 = {
   baseName: baseName,            // display name for a command id
   ctxLabel: ctxLabel,              // human-readable label for a conflict-context code
 };
+
+})();
