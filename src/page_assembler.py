@@ -81,24 +81,27 @@ def _esc(s):
 def discover_games(root):
     """Import every games/<slug>/game_module_generator.py under `root`.
 
-    Returns a list of (slug, name, module) sorted by slug.  `slug` is the folder
-    name (authoritative); `name` is the module's _GAME_NAME (falling back to slug).
-    Importing a generator only defines its functions -- build()/regen() run only
-    under `if __name__ == '__main__'`, so discovery has no side effects.
+    Returns a list of (slug, name, module) sorted by slug.  The slug is the module's
+    `_GAME_SLUG` (the authoritative, lowercase site/ folder name) -- NOT the source
+    folder, which may be capitalised (e.g. games/Warcraft3/ -> slug "warcraft3").
+    `name` is `_GAME_NAME`.  Importing a generator only defines its functions --
+    build()/regen() run only under `if __name__ == '__main__'`, so discovery has no
+    side effects.
     """
     games_dir = os.path.join(root, 'games')
     found = []
     if not os.path.isdir(games_dir):
         return found
-    for slug in sorted(os.listdir(games_dir)):
-        gen_path = os.path.join(games_dir, slug, 'game_module_generator.py')
+    for folder in sorted(os.listdir(games_dir)):
+        gen_path = os.path.join(games_dir, folder, 'game_module_generator.py')
         if not os.path.isfile(gen_path):
             continue
-        spec = importlib.util.spec_from_file_location('game_module_%s' % slug, gen_path)
+        spec = importlib.util.spec_from_file_location('game_module_%s' % folder, gen_path)
         mod = importlib.util.module_from_spec(spec)
         spec.loader.exec_module(mod)
+        slug = getattr(mod, '_GAME_SLUG', folder.lower())
         found.append((slug, getattr(mod, '_GAME_NAME', slug), mod))
-    return found
+    return sorted(found, key=lambda g: g[0])
 
 
 def build_all(root):

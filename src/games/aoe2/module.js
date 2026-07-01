@@ -296,13 +296,13 @@ function menusOf(info){
   info.detached_groups.forEach((g,i)=>out.push(['Group '+(i+1), g]));
   return out;
 }
-function forEachEntry(fn){
-  [state.base, state.profile].forEach(info=>
+function forEachEntry(doc, fn){
+  [doc&&doc.base, doc&&doc.profile].forEach(info=>
     menusOf(info).forEach(([,menu])=>menu.forEach(fn)));
 }
-function buildEntries(){
+function buildEntries(doc){
   const list=[]; const occ=new Map();
-  [['b',state.base],['p',state.profile]].forEach(([tag,info])=>{
+  [['b',doc&&doc.base],['p',doc&&doc.profile]].forEach(([tag,info])=>{
     menusOf(info).forEach(([label,menu])=>{
       menu.forEach(e=>{
         if(e.id<=0) return;
@@ -452,6 +452,35 @@ function ctxLabel(ctx){
   return rest||ctx;
 }
 
+// ---- file I/O: the engine hands us File objects + an opaque per-game doc ----
+// AoE2's doc is { profile, base, name }: a profile (.hkp, the legacy shared menus) and a
+// Base.hkp (the remappable system) loaded in either order/pick.  load() merges one file
+// into the doc; save() packages both back into the download zip.
+async function loadFile(file, prev){
+  const doc = prev || { profile:null, base:null, name:null };
+  const info = hkp.parse(await hkp.inflateRaw(new Uint8Array(await file.arrayBuffer())));
+  const stem = file.name.split(/[\\/]/).pop().replace(/\.[^.]*$/,'');
+  if(info.kind==='shared'){ doc.profile=info; if(stem.toLowerCase()!=='base') doc.name=stem; }
+  else { doc.base=info; }
+  return doc;
+}
+async function saveDoc(doc, name){
+  const blob = await hkp.buildZip(name, doc&&doc.profile, doc&&doc.base);
+  return { blob:blob, filename:name+'.zip',
+    note:'Downloaded '+name+'.zip — extract into your profile folder ('
+        +name+'.hkp at the root, '+name+'/Base.hkp in the subfolder).' };
+}
+function fileStatus(doc, name){
+  const profLabel = (name && name!=='Hotkeys') ? name+'.hkp' : 'top-level &lt;Name&gt;.hkp';
+  const prof = (doc && doc.profile)
+    ? '<span class="chip ok">✓ '+(name||'profile')+'.hkp</span>'
+    : '<span class="chip need">⬆ load '+profLabel+'</span>';
+  const base = (doc && doc.base)
+    ? '<span class="chip ok">✓ Base.hkp</span>'
+    : '<span class="chip need">⬆ load Base.hkp (in &lt;Name&gt;/ subfolder)</span>';
+  return prof + base;
+}
+
 // ===== register this game + wire its implementations into the engine's GAME interface =====
 // Self-registers under its slug (the shell's GAMES starts empty); the engine then picks the
 // active GAME from window.GAME_DATA.game.
@@ -464,6 +493,7 @@ GAMES.aoe2 = {
     fileLabel: 'Load .hkp files',
     fileAccept: '.hkp',
     multiple: true,
+    usesProfileName: true,        // show the profile-name field (download is <Name>.zip)
     hasChroniclesToggle: true,
     pathHelpTitle: 'Where AoE2:DE hotkeys go (click for details)',
     pathHelp:
@@ -484,7 +514,10 @@ GAMES.aoe2 = {
       + 'hotkey layout in-game first so Steam removes its cloud copy.',
   },
   // file format: bytes <-> parsed doc, and download packaging
-  codec: { parse:hkp.parse, unparse:hkp.unparse, inflate:hkp.inflateRaw,
+  // file format: the engine calls load()/save() (opaque doc in, packaged download out);
+  // the lower-level parse/inflate/zip helpers are AoE2-internal (used by load/save above).
+  codec: { load:loadFile, save:saveDoc,
+           parse:hkp.parse, unparse:hkp.unparse, inflate:hkp.inflateRaw,
            deflate:hkp.deflateRaw, buildZip:hkp.buildZip, buildZipBytes:hkp.buildZipBytes },
   // game-specific input: extra VK labels + the on-screen mouse buttons
   input: {
@@ -506,8 +539,9 @@ GAMES.aoe2 = {
     chronIds = new Set((d.card&&d.card.chronicles)||[]);
     hiddenIds = new Set((d.card&&d.card.hidden)||[]);
   },
-  bindings: buildEntries,        // parsed doc -> the engine's editable rec list
-  forEachEntry: forEachEntry,    // iterate raw entries (used by the layout remap)
+  fileStatus: fileStatus,        // load-status chips for the toolbar (doc, name) -> html
+  bindings: buildEntries,        // doc -> the engine's editable rec list
+  forEachEntry: forEachEntry,    // iterate raw entries of a doc (used by the layout remap)
   groupOf: groupNameOf,          // display group heading for a rec
   context: recContext,           // conflict-scope code for a rec
   classify: ctxClassify,         // do two same-combo recs clash? -> tier | null

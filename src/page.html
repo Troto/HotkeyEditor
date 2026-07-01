@@ -63,6 +63,11 @@
   button.sm { padding: 4px 9px; font-size: 12px; background: #2c313d; }
   button:disabled { opacity: .45; cursor: default; }
   .filebtn { display: inline-block; }
+  .load-or { color: #8c93a3; font-size: 12px; text-transform: uppercase; letter-spacing: .5px; margin: 0 6px; }
+  .filterbar { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; margin-left: 32px; }
+  .filterbar .rf-label { color: #9aa3b2; font-size: 14px; margin-right: 4px; }
+  .filterbar button { font-size: 14px; padding: 6px 12px; }
+  .filterbar button.on { background: var(--blue); color: #fff; }
   input[type=file] { display: none; }
   input[type=search], input[type=text] { background: #11141b; border: 1px solid #2c313d;
            color: #e6e6e6; border-radius: 6px; padding: 7px 10px; font-size: 13px; }
@@ -99,7 +104,7 @@
   #kbbanner button { padding: 2px 8px; font-size: 11px; background: #4a3a1a; margin-left: 8px; }
   #kbbanner.active { border: 1px solid var(--accent); background: #2a2418; padding: 3px 10px; border-radius: 6px; }
   #search.has-text { border-color: var(--accent); }
-  .listtools { display: flex; gap: 8px; margin-top: 10px; }
+  .listtools { display: flex; gap: 8px; margin-top: 10px; align-items: center; }
   /* keyboard is pinned to the page centre (middle column, equal side gutters); the conflict
      panel fills the whole left gutter up to it, the right gutter mirrors it as empty space */
   .kbstage { display: grid; grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
@@ -272,6 +277,8 @@
   <h1>Hotkey Editor -<select id="gameSelect" class="gamesel"></select><span class="backupwarn">Always keep a backup of your hotkeys.</span></h1>
   <div class="sub" id="metaBlurb"></div>
   <div class="bar">
+    <button id="loadDefaults" type="button" style="display:none"></button>
+    <span id="loadOr" class="load-or" style="display:none">or</span>
     <label class="filebtn"><span id="fileLabelText">Load files</span>
       <input type="file" id="files">
     </label>
@@ -336,7 +343,7 @@
         <p class="khnote"><b>Browser shortcuts:</b> keys like <b>Ctrl+N</b> are intercepted as a browser shortcut, so trying to enter it directly won't work. Instead, either tap <b>Ctrl/Shift</b> or click <b>Ctrl/Alt/Shift</b> to "arm" the modifier ready for a second input, then press the key.</p>
       </aside>
     </div>
-    <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button><input type="search" id="search" placeholder="filter commands…" autocomplete="off"></div>
+    <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button><input type="search" id="search" placeholder="filter commands…" autocomplete="off"><div class="filterbar" id="filterbar" style="display:none"></div></div>
   </div>
   <div class="empty" id="placeholder"></div>
   <div id="content"></div>
@@ -359,7 +366,7 @@
 const GAMES = {};
 let GAME = null;                   // assigned once the game module has registered (below)
 
-const state = { profile:null, base:null, name:'Hotkeys' };
+const state = { doc:null, name:'Hotkeys' };   // doc is the active game's opaque document
 let capture = null;          // {rec, btn}
 let shadeByCount = true;     // request 5 toggle
 let layout = 'qwerty';       // 'qwerty' | 'dvorak' — drives keybind conversion + key labels
@@ -435,8 +442,9 @@ let keyEls={};               // 'k'+vk | 'm'+mod -> [keyboard DOM elements]
 let cmdEls=new Map();        // rec -> command-row DOM element (rebuilt each renderList)
 let selectedKey=null;        // 'k'+vk | 'm'+mod currently filtering, or null
 let selectedGroup=null;      // group name whose heading is "selected" (keys highlighted), or null
+let listFilter=null;         // active GAME.filters id (e.g. a WC3 race), or null = all
 function buildModel(){
-  const full=GAME.bindings().filter(r=>!r.hidden);   // always drop hidden cmds (kept in state for saving)
+  const full=GAME.bindings(state.doc).filter(r=>!r.hidden);   // always drop hidden cmds (kept in state for saving)
   hasChron=full.some(r=>r.chron);
   allRecs = hideChronicles ? full.filter(r=>!r.chron) : full;   // chronicles entries also stay in state
   const cw=document.getElementById('chronWrap'); if(cw) cw.style.display=hasChron?'':'none';
@@ -547,7 +555,7 @@ function updateConflictBadge(){
 // big, color-coded confirmed/possible warnings in the panel left of the keyboard
 function renderConflictPanel(){
   const el=document.getElementById('conflictpanel'); if(!el) return;
-  if(!dataReady || (!state.base && !state.profile)){ el.innerHTML=''; return; }
+  if(!dataReady || !state.doc){ el.innerHTML=''; return; }
   let c=0,p=0; conflictClusters.forEach(k=>{ k.sev==='confirmed'?c++:p++; });
   let html='<h3>Hotkey conflicts</h3>';
   if(!conflictClusters.length){
@@ -823,6 +831,25 @@ function balancedColumns(weights, k){
   bounds.unshift([0,i]);
   return bounds;
 }
+// Give each category a whole number of columns (>=1), never shared, summing to ~K: start every
+// category at 1 column, then hand out the remaining columns greedily to whichever category has the
+// highest per-column load (longest first), capped by maxes[i] (a category can't use more columns
+// than it has groups).  If there are more categories than K, each still gets 1 (columns narrow).
+function allocateColumns(weights, maxes, K){
+  const n=weights.length; if(!n) return [];
+  const alloc=weights.map(()=>1); let used=n;
+  while(used<K){
+    let best=-1, bestScore=-1;
+    for(let i=0;i<n;i++){
+      if(alloc[i]>=maxes[i]) continue;
+      const score=weights[i]/(alloc[i]+1);
+      if(score>bestScore){ bestScore=score; best=i; }
+    }
+    if(best<0) break;
+    alloc[best]++; used++;
+  }
+  return alloc;
+}
 function buildGroupEl(v, forceOpen){
   const group=v.group, recs=v.recs;
   const open=forceOpen || !collapsed.has(group.name);
@@ -865,36 +892,56 @@ function _renderList(){
   clearHover();   // rebuilding the list destroys any hovered row, so its mouseleave
                   // never fires — drop its now-orphaned keyboard preview here
   updateBanner();
-  if(!state.base && !state.profile) return;
+  if(!state.doc) return;
   const filter=document.getElementById('search').value.trim().toLowerCase();
   const kset=keyFilterSet();
+  const rf=(listFilter && GAME.recFilters) ? listFilter : null;   // active game filter (e.g. race)
   const forceOpen=!!filter || !!selectedKey || showConflictsOnly;
   const vis=[];
   groupedView.forEach(group=>{
     const recs=group.recs.filter(r=>
       (!filter||GAME.recName(r).toLowerCase().includes(filter)) && (!kset||kset.has(r))
-      && (!showConflictsOnly || recSev.has(r)));
+      && (!showConflictsOnly || recSev.has(r))
+      && (!rf || GAME.recFilters(r).indexOf(rf)>=0));
     if(recs.length) vis.push({group:group, recs:recs});
   });
-  vis.sort((a,b)=>a.group.name.localeCompare(b.group.name));   // alphabetical headings
+  // Group/column order: games may supply GAME.groupKey(rec) to cluster related categories
+  // (WC3 clusters generic/units/buildings/heroes); otherwise fall back to alphabetical.
+  const keyOf = GAME.groupKey ? (v=>GAME.groupKey(v.group.recs[0])) : (v=>v.group.name);
+  vis.sort((a,b)=>keyOf(a).localeCompare(keyOf(b)));
   if(!vis.length){ const d=document.createElement('div'); d.className='empty';
-    d.textContent=(selectedKey||filter||showConflictsOnly)?'No commands match the current filter.':'No hotkeys.';
+    d.textContent=(selectedKey||filter||showConflictsOnly||rf)?'No commands match the current filter.':'No hotkeys.';
     content.appendChild(d); return; }
   // Weight by each group's FULL command count (ignore collapse state) so the
   // column assignment stays fixed: collapsing a group just shrinks it in place
   // instead of repartitioning and shuffling other groups between columns.
   const HEADER_W=2;
-  const weights=vis.map(v=>HEADER_W + v.recs.length);
-  const k=Math.min(columnCount(content), vis.length);
-  balancedColumns(weights, k).forEach(([s,e])=>{
-    const col=document.createElement('div'); col.className='col';
-    for(let i=s;i<e;i++) col.appendChild(buildGroupEl(vis[i], forceOpen));
-    content.appendChild(col);
-  });
+  const gw=v=>HEADER_W + v.recs.length;   // a group's weight
+  const K=columnCount(content);
+  const addCol=(items,s,e)=>{ const col=document.createElement('div'); col.className='col';
+    for(let i=s;i<e;i++) col.appendChild(buildGroupEl(items[i], forceOpen)); content.appendChild(col); };
+  if(GAME.groupCategory){
+    // Strict categories: a column never mixes categories.  vis is already sorted category-major
+    // (GAME.groupKey), so bucket into contiguous category runs, allocate whole columns per
+    // category by size, then balance each category's groups within its own columns.
+    const cats=[]; let cur=null;
+    vis.forEach(v=>{ const c=GAME.groupCategory(v.group.recs[0]);
+      if(!cur||cur.id!==c){ cur={id:c, items:[]}; cats.push(cur); } cur.items.push(v); });
+    const weights=cats.map(c=>c.items.reduce((s,v)=>s+gw(v),0));
+    const maxes=cats.map(c=>c.items.length);
+    const alloc=allocateColumns(weights, maxes, K);
+    cats.forEach((c,ci)=>{
+      balancedColumns(c.items.map(gw), Math.min(alloc[ci], c.items.length))
+        .forEach(([s,e])=>addCol(c.items,s,e));
+    });
+  } else {
+    const k=Math.min(K, vis.length);
+    balancedColumns(vis.map(gw), k).forEach(([s,e])=>addCol(vis,s,e));
+  }
 }
 let _resizeT=null;
 window.addEventListener('resize', ()=>{ clearTimeout(_resizeT);
-  _resizeT=setTimeout(()=>{ if(state.base||state.profile) renderList(); }, 120); });
+  _resizeT=setTimeout(()=>{ if(state.doc) renderList(); }, 120); });
 function afterEdit(){ indexKeys(); computeConflicts(); refreshKeyboard(); clearHighlight(); clearHover(); renderList(); applyGroupHighlight(); }
 
 // ---- rebind / unbind (each entry independent — no syncing) ----
@@ -967,43 +1014,47 @@ async function onFiles(fileList){
   if(!files.length) return;
   setHint('parsing…');
   try{
-    // merge — files may be loaded in separate picks (they live in different folders)
+    // The game's codec decodes each file and merges it into its opaque doc; files may be
+    // loaded in separate picks (e.g. AoE2's two .hkp live in different folders).
     for(const f of files){
-      const info=GAME.codec.parse(await GAME.codec.inflate(new Uint8Array(await f.arrayBuffer())));
-      const base=f.name.split(/[\\/]/).pop().replace(/\.[^.]*$/,'');
-      if(info.kind==='shared'){ state.profile=info;
-        if(base.toLowerCase()!=='base') state.name=base; }
-      else { state.base=info; }
+      state.doc = await GAME.codec.load(f, state.doc);
     }
   }catch(e){ setHint('<span class="err">Could not parse: '+(e&&e.message||e)+'</span>'); return; }
-  if(state.name && state.name!=='Hotkeys') document.getElementById('pname').value=state.name;
   document.getElementById('files').value='';   // allow re-picking the same file
   // interpret the uploaded file as whatever layout the toggle is currently set to
   // (don't force QWERTY) — set the toggle before loading a Dvorak profile.
+  afterLoad();
+}
+// Start from the active game's bundled default file (no need to pick one first).
+async function loadDefaults(){
+  if(!(GAME.codec && GAME.codec.loadDefault)) return;
+  setHint('loading defaults…');
+  try{ state.doc = await GAME.codec.loadDefault(state.doc); }
+  catch(e){ setHint('<span class="err">Could not load defaults: '+(e&&e.message||e)+'</span>'); return; }
+  // Bundled defaults are authored in QWERTY; if the user is editing in Dvorak, convert them.
+  if(layout==='dvorak') remapDoc(buildVkMap(false));
+  afterLoad();
+}
+function afterLoad(){
+  if(state.doc && state.doc.name) state.name=state.doc.name;   // codec may suggest a name from the file
+  if(state.name && state.name!=='Hotkeys') document.getElementById('pname').value=state.name;
   buildModel();
   showUI();
   refreshKeyboard();
   renderList();
 }
 function updateFileStatus(){
-  const profLabel = (state.name && state.name!=='Hotkeys') ? state.name+'.hkp'
-                                                           : 'top-level &lt;Name&gt;.hkp';
-  const prof = state.profile
-    ? '<span class="chip ok">✓ '+(state.name||'profile')+'.hkp</span>'
-    : '<span class="chip need">⬆ load '+profLabel+'</span>';
-  const base = state.base
-    ? '<span class="chip ok">✓ Base.hkp</span>'
-    : '<span class="chip need">⬆ load Base.hkp (in &lt;Name&gt;/ subfolder)</span>';
-  document.getElementById('fstatus').innerHTML = prof + base;
+  // the active game owns its load-status text (how many files, what they're called)
+  document.getElementById('fstatus').innerHTML = GAME.fileStatus ? GAME.fileStatus(state.doc, state.name) : '';
 }
 function showUI(){
   document.getElementById('placeholder').style.display='none';
   document.getElementById('kbwrap').style.display='';
-  document.getElementById('pname').style.display='';
+  // profile-name field only for games whose download is named after a profile (e.g. AoE2)
+  document.getElementById('pname').style.display=(GAME.meta && GAME.meta.usesProfileName===false)?'none':'';
   document.getElementById('save').disabled=false;
   updateFileStatus();
-  setHint('Loaded '+allRecs.length+' commands ('
-    +[state.base?'Base.hkp':null, state.profile?'profile.hkp':null].filter(Boolean).join(' + ')+').');
+  setHint('Loaded '+allRecs.length+' commands.');
 }
 function setHint(html){ document.getElementById('hint').innerHTML=html; }
 
@@ -1016,11 +1067,15 @@ function syncLayoutToggle(){
   if(q) q.classList.toggle('lt-active', layout==='qwerty');
   if(d) d.classList.toggle('lt-active', layout==='dvorak');
 }
+// Apply a VK remap (from buildVkMap) to every remappable entry in the doc; returns the count.
+function remapDoc(m){
+  let n=0;
+  GAME.forEachEntry(state.doc, e=>{ if(e.id>0 && m[e.code]!==undefined){ e.code=m[e.code]; n++; } });
+  return n;
+}
 function setLayout(target){
   if(target===layout) return;
-  const m=buildVkMap(target==='qwerty');   // to QWERTY = reverse (Dvorak->QWERTY)
-  let n=0;
-  GAME.forEachEntry(e=>{ if(e.id>0 && m[e.code]!==undefined){ e.code=m[e.code]; n++; } });
+  const n=remapDoc(buildVkMap(target==='qwerty'));   // to QWERTY = reverse (Dvorak->QWERTY)
   layout=target;
   selectedKey=null;
   syncLayoutToggle();
@@ -1033,15 +1088,14 @@ function setLayout(target){
 // ---- save ----
 async function save(){
   state.name=document.getElementById('pname').value.trim()||'Hotkeys';
-  let blob;
-  try{ blob=await GAME.codec.buildZip(state.name, state.profile, state.base); }
+  let res;
+  try{ res=await GAME.codec.save(state.doc, state.name); }
   catch(e){ setHint('<span class="err">build failed: '+(e&&e.message||e)+'</span>'); return; }
   const a=document.createElement('a');
-  a.href=URL.createObjectURL(blob); a.download=state.name+'.zip';
+  a.href=URL.createObjectURL(res.blob); a.download=res.filename;
   document.body.appendChild(a); a.click(); a.remove();
   setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
-  setHint('Downloaded '+state.name+'.zip — extract into your profile folder ('
-    +state.name+'.hkp at the root, '+state.name+'/Base.hkp in the subfolder).');
+  setHint(res.note || ('Downloaded '+res.filename+'.'));
 }
 
 // ===== active game module ========================================================
@@ -1073,11 +1127,35 @@ function applyMeta(){
   html('pathHelpPop', m.pathHelp);
   html('placeholder', m.placeholder);
   html('applyNote', m.applyNote);
+  // optional "start from built-in defaults" button: only for games that bundle a default file
+  const db=document.getElementById('loadDefaults'), dor=document.getElementById('loadOr');
+  if(db){
+    const has = m.defaultsLabel && GAME.codec && GAME.codec.loadDefault;
+    db.textContent = has ? m.defaultsLabel : '';
+    db.style.display = has ? '' : 'none';
+    if(dor) dor.style.display = has ? '' : 'none';
+  }
+  buildFilterBar();
+}
+// Optional per-game list filter (e.g. WC3 races): buttons from GAME.filters, filtered via
+// GAME.recFilters(rec).  Absent for AoE2 -> bar stays hidden.
+function buildFilterBar(){
+  const bar=document.getElementById('filterbar'); if(!bar) return;
+  const filters=(GAME && GAME.filters) || null;
+  if(!filters || !filters.length || !GAME.recFilters){ bar.style.display='none'; bar.innerHTML=''; return; }
+  bar.style.display=''; bar.innerHTML='';
+  const mk=(id,label)=>{ const b=document.createElement('button'); b.className='sm'+(listFilter===id?' on':'');
+    b.textContent=label; b.onclick=()=>{ listFilter=id; buildFilterBar(); renderList(); }; return b; };
+  const lbl=document.createElement('span'); lbl.className='rf-label'; lbl.textContent=(GAME.meta&&GAME.meta.filterLabel)||'Show:';
+  bar.appendChild(lbl);
+  bar.appendChild(mk(null,'All'));
+  filters.forEach(f=>bar.appendChild(mk(f.id,f.label)));
 }
 applyMeta();
 
 // ---- wire up ----
 document.getElementById('files').addEventListener('change', e=>onFiles(e.target.files));
+document.getElementById('loadDefaults').addEventListener('click', loadDefaults);
 document.getElementById('search').addEventListener('input', e=>{
   e.target.classList.toggle('has-text', !!e.target.value.trim());
   if(selectedKey){ selectedKey=null;
@@ -1124,7 +1202,7 @@ window.addEventListener('pageshow', syncTogglesToState);
 function applyData(d){
   GAME.setData(d);   // module owns the data shape; engine just triggers the rebuild
   dataReady=true;    // dataset applied -> conflict computation/badge/panel may run
-  if(state.base||state.profile){ buildModel(); computeConflicts(); refreshKeyboard(); renderList(); }
+  if(state.doc){ buildModel(); computeConflicts(); refreshKeyboard(); renderList(); }
   else updateConflictBadge();
 }
 function loadData(){

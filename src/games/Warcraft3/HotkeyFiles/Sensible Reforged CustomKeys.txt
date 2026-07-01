@@ -1,0 +1,4086 @@
+//////////////////////////////////////////////////////
+//This file includes all racial units, heroes,
+//upgrades, buildings and abilities.  Please consult
+//CustomKeyInfo.txt for information on how to go about
+//using this file for customized hotkey support.
+//////////////////////////////////////////////////////
+
+
+/////////////////////////////
+//Shared Commands (attack, etc.)
+/////////////////////////////
+
+// Move
+[CmdMove]
+Hotkey=M
+
+// Attack
+[CmdAttack]
+Hotkey=A
+
+// Attack Ground
+[CmdAttackGround]
+Hotkey=G
+
+// Build Structure
+[CmdBuild]
+Hotkey=B
+
+// Build Structure
+[CmdBuildHuman]
+Hotkey=B
+
+// Build Structure
+[CmdBuildOrc]
+Hotkey=B
+
+// Create Building
+[CmdBuildNightElf]
+Hotkey=B
+
+// Summon Building
+[CmdBuildUndead]
+Hotkey=B
+
+// Cancel
+[CmdCancel]
+Hotkey=27
+
+// Cancel
+[CmdCancelBuild]
+Hotkey=27
+
+// Cancel
+[CmdCancelTrain]
+Hotkey=27
+
+// Cancel
+[CmdCancelRevive]
+Hotkey=27
+
+// Hold Position
+[CmdHoldPos]
+Hotkey=H
+
+// Patrol
+[CmdPatrol]
+Hotkey=P
+
+// Set Rally Point
+[CmdRally]
+Hotkey=Y
+
+// Hero Abilities
+[CmdSelectSkill]
+Hotkey=O
+
+// Stop
+[CmdStop]
+Hotkey=S
+
+// Gather
+[Ahar]
+Hotkey=G
+Unhotkey=E
+
+// Gather
+[Ahrl]
+Hotkey=G
+Unhotkey=E
+
+// Repair
+[Arep]
+Hotkey=R
+Unhotkey=R
+
+// Select User
+[Anei]
+Hotkey=U
+
+// Load
+[Aloa]
+Hotkey=L
+
+// Unload All
+[Adro]
+Hotkey=U
+
+// Unload All
+[Sdro]
+Hotkey=U
+
+/////////////////////////////
+//Human Units & Abilities
+/////////////////////////////
+
+// Train Peasant
+[hpea]
+Hotkey=P
+
+// Repair
+[Ahrp]
+Hotkey=R
+Unhotkey=R
+
+// Call to Arms
+[Amil]
+Hotkey=C
+Unhotkey=W
+UnhotkeyId=Ami1
+
+[Ami1]
+ParentId=Amil
+
+// Call to Arms
+[Amic]
+Hotkey=C
+Unhotkey=W
+UnhotkeyId=Ami2
+
+[Ami2]
+ParentId=Amic
+
+// Militia
+[hmil]
+Hotkey= 
+IgnoreBuilds=1
+
+// Train Footman
+[hfoo]
+Hotkey=F
+
+// Defend
+[Adef]
+Hotkey=D
+Unhotkey=D
+
+// Train Rifleman
+[hrif]
+Hotkey=R
+
+// Train Knight
+[hkni]
+Hotkey=K
+
+// Train Sorceress
+[hsor]
+Hotkey=S
+
+// Slow
+[Aslo]
+Hotkey=W
+Unhotkey=W
+
+// Polymorph
+[Aply]
+Hotkey=O
+
+// Invisibility
+[Aivs]
+Hotkey=I
+
+// Train Priest
+[hmpr]
+Hotkey=P
+
+// Inner Fire
+[Ainf]
+Hotkey=F
+Unhotkey=F
+
+// Heal
+[Ahea]
+Hotkey=E
+Unhotkey=E
+
+// Dispel Magic
+[Adis]
+Hotkey=D
+
+// Train Spellbreaker
+[hspt]
+Hotkey=B
+
+// Spell Steal
+[Asps]
+Hotkey=T
+Unhotkey=T
+
+// Control Magic
+[Acmg]
+Hotkey=C
+
+// Train Flying Machine
+[hgyr]
+Hotkey=F
+
+// Train Mortar Team
+[hmtm]
+Hotkey=M
+CanAttackGround=1
+
+// Flare
+[Afla]
+Hotkey=F
+
+// Train Siege Engine
+[hmtt]
+Hotkey=E
+
+// Train Siege Engine
+[hrtt]
+Hotkey=E
+
+// Train Dragonhawk Rider
+[hdhw]
+Hotkey=D
+
+// Aerial Shackles
+[Amls]
+Hotkey=E
+
+// Cloud
+[Aclf]
+Hotkey=C
+
+// Train Gryphon Rider
+[hgry]
+Hotkey=G
+
+/////////////////////////////
+//Human Bldgs, Upgrades & Abilities
+/////////////////////////////
+
+// Research Control Magic
+[Rhss]
+Hotkey=G
+
+// Upgrade to Iron Forged Swords
+[Rhme]
+Hotkey=S,S,S
+
+// Upgrade to Black Gunpowder
+[Rhra]
+Hotkey=G,G,G
+
+// Upgrade to Iron Plating
+[Rhar]
+Hotkey=P,P,P
+
+// Upgrade to Studded Leather Armor
+[Rhla]
+Hotkey=A,A,A
+
+// Upgrade to Improved Masonry
+[Rhac]
+Hotkey=M,M,M
+
+// Research Flying Machine Bombs
+[Rhgb]
+Hotkey=B
+
+// Improved Lumber Harvesting
+[Rhlh]
+Hotkey=L,L
+
+// Research Defend
+[Rhde]
+Hotkey=D
+
+// Research Animal War Training
+[Rhan]
+Hotkey=A
+
+// Priest Adept Training
+[Rhpt]
+Hotkey=T,T
+
+// Sorceress Adept Training
+[Rhst]
+Hotkey=O,O
+
+// Upgrade to Long Rifles
+[Rhri]
+Hotkey=L
+
+// Research Magic Sentry
+[Rhse]
+Hotkey=M
+
+// Research Flare
+[Rhfl]
+Hotkey=R
+
+// Research Storm Hammers
+[Rhhb]
+Hotkey=H
+
+// Research Barrage
+[Rhrt]
+Hotkey=G
+
+// Research Backpack
+[Rhpm]
+Hotkey=B
+
+// Research Flak Cannons
+[Rhfc]
+Hotkey=C
+
+// Research Fragmentation Shards
+[Rhfs]
+Hotkey=S
+
+// Research Cloud
+[Rhcd]
+Hotkey=C
+
+// Research Sundering Blades
+[Rhsb]
+Hotkey=B
+
+// Build Town Hall
+[htow]
+Hotkey=H
+
+// Upgrade to Keep
+[hkee]
+Hotkey=U
+
+// Upgrade to Castle
+[hcas]
+Hotkey=U
+
+// Build Barracks
+[hbar]
+Hotkey=B
+
+// Build Lumber Mill
+[hlum]
+Hotkey=L
+
+// Build Blacksmith
+[hbla]
+Hotkey=S
+
+// Build Altar of Kings
+[halt]
+Hotkey=A
+
+// Build Arcane Sanctum
+[hars]
+Hotkey=R
+
+// Build Workshop
+[harm]
+Hotkey=W
+
+// Build Scout Tower
+[hwtw]
+Hotkey=T
+
+// Upgrade to Guard Tower
+[hgtw]
+Hotkey=G
+OffensiveStructure=1
+
+// Upgrade to Cannon Tower
+[hctw]
+Hotkey=C
+OffensiveStructure=1
+CanAttackGround=1
+
+Hotkey=C
+// Upgrade to Arcane Tower
+[hatw]
+Hotkey=N
+OffensiveStructure=1
+
+// Reveal
+[AHta]
+Hotkey=R
+
+// Build Farm
+[hhou]
+Hotkey=F
+
+// Build Gryphon Aviary
+[hgra]
+Hotkey=G
+
+// Build Arcane Vault
+[hvlt]
+Hotkey=V
+
+/////////////////////////////
+//Human Heroes & Abilities
+/////////////////////////////
+
+// Summon Paladin
+[Hpal]
+Hotkey=L
+
+// Holy Light
+[AHhb]
+Hotkey=T
+Researchhotkey=T
+
+// Divine Shield
+[AHds]
+Hotkey=D
+Unhotkey=D
+Researchhotkey=D
+
+// Devotion Aura
+[AHad]
+Researchhotkey=V
+
+// Resurrection
+[AHre]
+Hotkey=R
+Researchhotkey=R
+
+// Summon Archmage
+[Hamg]
+Hotkey=A
+
+// Blizzard
+[AHbz]
+Hotkey=B
+Researchhotkey=B
+
+// Summon Water Elemental
+[AHwe]
+Hotkey=W
+Researchhotkey=W
+
+// Brilliance Aura
+[AHab]
+Researchhotkey=R
+
+// Mass Teleport
+[AHmt]
+Hotkey=T
+Researchhotkey=T
+
+// Summon Mountain King
+[Hmkg]
+Hotkey=M
+
+// Storm Bolt
+[AHtb]
+Hotkey=T
+Researchhotkey=T
+
+// Thunder Clap
+[AHtc]
+Hotkey=C
+Researchhotkey=C
+
+// Bash
+[AHbh]
+Researchhotkey=B
+
+// Activate Avatar
+[AHav]
+Hotkey=V
+Unhotkey=V
+Researchhotkey=V
+
+// Summon Blood Mage
+[Hblm]
+Hotkey=B
+
+// Siphon Mana
+[AHdr]
+Hotkey=N
+Researchhotkey=N
+
+// Flame Strike
+[AHfs]
+Hotkey=F
+Researchhotkey=F
+
+// Banish
+[AHbn]
+Hotkey=B
+Researchhotkey=B
+
+// Phoenix
+[AHpx]
+Hotkey=X
+Researchhotkey=X
+
+/////////////////////////////
+//Orc Units & Abilities
+/////////////////////////////
+
+// Train Peon
+[opeo]
+Hotkey=P
+
+// Train Grunt
+[ogru]
+Hotkey=G
+
+// Train Headhunter
+[ohun]
+Hotkey=T
+
+// Train Berserker
+[otbk]
+Hotkey=T
+
+// Train Demolisher
+[ocat]
+Hotkey=D
+CanAttackGround=1
+
+// Train Shaman
+[oshm]
+Hotkey=S
+
+// Purge
+[Apg2]
+Hotkey=G
+
+// Train Witch Doctor
+[odoc]
+Hotkey=W
+
+// Sentry Ward
+[Aeye]
+Hotkey=W
+
+// Stasis Trap
+[Asta]
+Hotkey=T
+
+// Healing Ward
+[Ahwd]
+Hotkey=E
+
+// Berserk
+[Absk]
+Hotkey=B
+
+// Train Raider
+[orai]
+Hotkey=R
+
+// Ensnare
+[Aens]
+Hotkey=E
+
+// Train Wind Rider
+[owyv]
+Hotkey=W
+
+// Train Kodo Beast
+[okod]
+Hotkey=K
+
+// Devour
+[Adev]
+Hotkey=D
+
+// Train Batrider
+[otbr]
+Hotkey=B
+
+// Unstable Concoction
+[Auco]
+Hotkey=C
+Unhotkey=C
+
+// Train Spirit Walker
+[ospm]
+Hotkey=W
+
+// Ancestral Spirit
+[Aast]
+Hotkey=C
+
+// Disenchant
+[Adcn]
+Hotkey=D
+
+// Corporeal Form
+[Acpf]
+Hotkey=F
+Unhotkey=F
+
+// Ethereal Form
+[Aetf]
+Hotkey=F
+Unhotkey=F
+
+// Spirit Link
+[Aspl]
+Hotkey=R
+
+// Train Tauren
+[otau]
+Hotkey=T
+
+// Purge
+[Aprg]
+Hotkey=G
+
+// Bloodlust
+[Ablo]
+Hotkey=B
+Unhotkey=B
+
+// Lightning Shield
+[Alsh]
+Hotkey=L
+
+/////////////////////////////
+//Orc Bldgs, Upgrades & Abilities
+/////////////////////////////
+
+// Upgrade to Steel Melee Weapons
+[Rome]
+Hotkey=M,M,M
+
+// Upgrade to Steel Ranged Weapons
+[Rora]
+Hotkey=R,R,R
+
+// Upgrade to Steel Unit Armor
+[Roar]
+Hotkey=A,A,A
+
+// Upgrade War Drums
+[Rwdm]
+Hotkey=D
+
+// Pillage
+[Ropg]
+Hotkey=G
+
+// Research Brute Strength
+[Robs]
+Hotkey=B
+
+// Upgrade Pulverize
+[Rows]
+Hotkey=P
+
+// Research Ensnare
+[Roen]
+Hotkey=N
+
+// Research Envenomed Spears
+[Rovs]
+Hotkey=E
+
+// Witch Doctor Adept Training
+[Rowd]
+Hotkey=D,D
+
+// Shaman Adept Training
+[Rost]
+Hotkey=M,M
+
+// Upgrade to Spiked Barricades
+[Rosp]
+Hotkey=S,S,S
+
+// Research Troll Regeneration
+[Rotr]
+Hotkey=R
+
+// Research Liquid Fire
+[Rolf]
+Hotkey=L
+
+// Research Backpack
+[Ropm]
+Hotkey=B
+
+// Spirit Walker Adept Training
+[Rowt]
+Hotkey=R,R
+
+// Berserker Upgrade
+[Robk]
+Hotkey=E
+
+// Reinforced Defenses
+[Rorb]
+Hotkey=D
+
+// Burning Oil
+[Robf]
+Hotkey=N
+
+// Build Great Hall
+[ogre]
+Hotkey=H
+
+// Upgrade to Stronghold
+[ostr]
+Hotkey=U
+
+// Upgrade to Fortress
+[ofrt]
+Hotkey=U
+
+// Build Barracks
+[obar]
+Hotkey=B
+
+// Build War Mill
+[ofor]
+Hotkey=M
+
+// Build Burrow
+[otrb]
+Hotkey=O
+
+// Build Watch Tower
+[owtw]
+Hotkey=W
+OffensiveStructure=1
+
+// Build Altar of Storms
+[oalt]
+Hotkey=A
+
+// Build Spirit Lodge
+[osld]
+Hotkey=S
+
+// Build Beastiary
+[obea]
+Hotkey=E
+
+// Build Tauren Totem
+[otto]
+Hotkey=T
+
+// Battle Stations
+[Abtl]
+Hotkey=B
+
+// Stand Down
+[Astd]
+Hotkey=D
+
+// Build Reinforced Burrow
+[orbr]
+Hotkey=O
+
+// Build Voodoo Lounge
+[ovln]
+Hotkey=V
+
+
+/////////////////////////////
+//Orc Heroes & Abilities
+/////////////////////////////
+
+// Summon Blademaster
+[Obla]
+Hotkey=B
+
+// Wind Walk
+[AOwk]
+Hotkey=W
+Researchhotkey=W
+
+// Critical Strike
+[AOcr]
+Researchhotkey=C
+
+// Mirror Image
+[AOmi]
+Hotkey=R
+Researchhotkey=R
+
+// Bladestorm
+[AOww]
+Hotkey=B
+Researchhotkey=B
+
+// Summon Far Seer
+[Ofar]
+Hotkey=F
+
+// Chain Lightning
+[AOcl]
+Hotkey=C
+Researchhotkey=C
+
+// Far Sight
+[AOfs]
+Hotkey=F
+Researchhotkey=F
+
+// Feral Spirit
+[AOsf]
+Hotkey=T
+Researchhotkey=T
+
+// Earthquake
+[AOeq]
+Hotkey=E
+Researchhotkey=E
+
+// Summon Shadow Hunter
+[Oshd]
+Hotkey=H
+
+// Healing Wave
+[AOhw]
+Hotkey=E
+Researchhotkey=E
+
+// Serpent Ward
+[AOsw]
+Hotkey=W
+Researchhotkey=W
+
+// Hex
+[AOhx]
+Hotkey=X
+Researchhotkey=X
+
+// Big Bad Voodoo
+[AOvd]
+Hotkey=V
+Researchhotkey=V
+
+// Summon Tauren Chieftain
+[Otch]
+Hotkey=T
+
+
+// Shockwave
+[AOsh]
+Hotkey=W
+Researchhotkey=W
+
+// Endurance Aura
+[AOae]
+Researchhotkey=E
+
+// War Stomp
+[AOws]
+Hotkey=T
+Researchhotkey=T
+
+// Reincarnation
+[AOre]
+Researchhotkey=R
+
+
+/////////////////////////////
+//Night Elf Units & Abilities
+/////////////////////////////
+
+// Hide
+[Ashm]
+Hotkey=I
+
+// Hide
+[AIhm]
+Hotkey=I
+
+// Hide
+[Sshm]
+Hotkey=I
+
+// Hide
+[Ahid]
+Hotkey=I
+
+// Train Wisp
+[ewsp]
+Hotkey=W
+Attackless=1
+
+// Renew
+[Aren]
+Hotkey=R
+Unhotkey=R
+
+// Gather
+[Awha]
+Hotkey=G
+
+// Detonate
+[Adtn]
+Hotkey=D
+
+// Train Archer
+[earc]
+Hotkey=A
+
+// Mount Hippogryph
+[Aco2]
+Hotkey=U
+
+// Dismount Archer & Hippogryph
+[Adec]
+Hotkey=U
+
+// Train Huntress
+[esen]
+Hotkey=H
+
+// Sentinel
+[Aesn]
+Hotkey=E
+
+// Train Glaive Thrower
+[ebal]
+Hotkey=T
+CanAttackGround=1
+
+// Train Dryad
+[edry]
+Hotkey=D
+
+// Abolish Magic
+[Aadm]
+Hotkey=B
+Unhotkey=B
+
+// Train Druid of the Claw
+[edoc]
+Hotkey=C
+
+// Roar
+[Aroa]
+Hotkey=R
+
+// Rejuvenation
+[Arej]
+Hotkey=E
+
+// Bear Form
+[Abrf]
+Hotkey=F
+Unhotkey=F
+
+// Train Druid of the Claw
+[edcm]
+Hotkey= 
+
+// Roar
+[Ara2]
+Hotkey=R
+
+// Train Mountain Giant
+[emtg]
+Hotkey=G
+
+// War Club
+[Agra]
+Hotkey=W
+
+// Taunt
+[Atau]
+Hotkey=T
+
+// Train Hippogryph
+[ehip]
+Hotkey=H
+
+// Ride Hippogryph
+[ehpr]
+Hotkey=R
+
+// Pick up Archer
+[Aco3]
+Hotkey=U
+
+// Train Druid of the Talon
+[edot]
+Hotkey=T
+
+// Faerie Fire
+[Afae]
+Hotkey=R
+Unhotkey=R
+
+// Cyclone
+[Acyc]
+Hotkey=C
+
+// Storm Crow Form
+[Arav]
+Hotkey=F
+Unhotkey=F
+
+// Train Druid of the Talon
+[edtm]
+Hotkey= 
+
+// Faerie Fire
+[Afa2]
+Hotkey=R
+Unhotkey=R
+
+// Train Faerie Dragon
+[efdr]
+Hotkey=F
+
+// Mana Flare
+[Amfl]
+Hotkey=F
+Unhotkey=F
+
+// Phase Shift
+[Apsh]
+Hotkey=E
+Unhotkey=E
+
+// Train Chimaera
+[echm]
+Hotkey=C
+
+////////////////////////////
+//Night Elf Bldgs, Upgrades & Abilities
+////////////////////////////
+
+// Upgrade to Strength of the Moon
+[Resm]
+Hotkey=M,M,M
+
+// Upgrade to Strength of the Wild
+[Resw]
+Hotkey=W,W,W
+
+// Upgrade to Moon Armor
+[Rema]
+Hotkey=A,A,A
+
+// Upgrade to Reinforced Hides
+[Rerh]
+Hotkey=R,R,R
+
+// Upgrade to Ultravision
+[Reuv]
+Hotkey=U
+
+// Research Nature's Blessing
+[Renb]
+Hotkey=N
+
+// Research Improved Bows
+[Reib]
+Hotkey=I
+
+// Research Marksmanship
+[Remk]
+Hotkey=M
+
+// Research Sentinel
+[Resc]
+Hotkey=S
+
+// Upgrade Moon Glaive
+[Remg]
+Hotkey=G
+CanAttackGround=1
+
+// Druid of the Talon Adept Training
+[Redt]
+Hotkey=A,A
+
+// Druid of the Claw Adept Training
+[Redc]
+Hotkey=L,L
+
+// Research Abolish Magic
+[Resi]
+Hotkey=S
+
+// Research Hippogryph Taming
+[Reht]
+Hotkey=I
+
+// Research Corrosive Breath
+[Recb]
+Hotkey=B
+
+// Research Vorpal Blades
+[Repb]
+Hotkey=P
+
+// Research Resistant Skin
+[Rers]
+Hotkey=T
+
+// Research Hardened Skin
+[Rehs]
+Hotkey=H
+
+// Research Mark of the Claw
+[Reeb]
+Hotkey=M
+
+// Research Mark of the Talon
+[Reec]
+Hotkey=M
+
+// Research Well Spring
+[Rews]
+Hotkey=E
+
+// Research Backpack
+[Repm]
+Hotkey=B
+
+// Eat Tree
+[Aeat]
+Hotkey=E
+
+// Root
+[Aroo]
+Hotkey=R
+Unhotkey=R
+
+// Root
+[Aro1]
+Hotkey=R
+Unhotkey=R
+
+// Root
+[Aro2]
+Hotkey=R
+Unhotkey=R
+
+// Create Tree of Life
+[etol]
+Hotkey=T
+
+// Entangle Gold Mine
+[Aent]
+Hotkey=G
+
+// Load
+[Aenc]
+Hotkey=L
+Unhotkey=U
+
+// Load Wisp
+[Slo2]
+Hotkey=L
+
+// Unload All
+[Adri]
+Hotkey=U
+
+// Upgrade to Tree of Ages
+[etoa]
+Hotkey=U
+
+// Upgrade to Tree of Eternity
+[etoe]
+Hotkey=U
+
+// Create Ancient of War
+[eaom]
+Hotkey=R
+
+// Create Hunter's Hall
+[edob]
+Hotkey=H
+
+// Create Ancient Protector
+[etrp]
+Hotkey=P
+OffensiveStructure=1
+
+// Create Moon Well
+[emow]
+Hotkey=M
+
+// Replenish Mana and Life
+[Ambt]
+Hotkey=R
+Unhotkey=R
+
+// Create Altar of Elders
+[eate]
+Hotkey=A
+
+// Create Ancient of Lore
+[eaoe]
+Hotkey=L
+
+// Create Ancient of Wind
+[eaow]
+Hotkey=W
+
+// Create Chimaera Roost
+[edos]
+Hotkey=C
+
+// Build Ancient of Wonders
+[eden]
+Hotkey=D
+
+// Entangle Gold Mine
+[egol]
+Hoktey=None
+
+//////////////////////////////
+//Night Elf Heroes & Abilities
+//////////////////////////////
+
+// Summon Demon Hunter
+[Edem]
+Hotkey=D
+
+// Mana Burn
+[AEmb]
+Hotkey=B
+Researchhotkey=B
+
+// Activate Immolation
+[AEim]
+Hotkey=L
+Unhotkey=L
+Researchhotkey=L
+
+// Evasion
+[AEev]
+Researchhotkey=E
+
+// Metamorphosis
+[AEme]
+Hotkey=T
+Researchhotkey=T
+
+// Summon Keeper of the Grove
+[Ekee]
+Hotkey=K
+
+// Entangling Roots
+[AEer]
+Hotkey=E
+Researchhotkey=E
+
+// Force of Nature
+[AEfn]
+Hotkey=F
+Researchhotkey=F
+
+// Thorns Aura
+[AEah]
+Researchhotkey=R
+
+// Tranquility
+[AEtq]
+Hotkey=T
+Researchhotkey=T
+
+// Summon Priestess of the Moon
+[Emoo]
+Hotkey=P
+
+// Scout
+[AEst]
+Hotkey=C
+Researchhotkey=C
+
+// Searing Arrows
+[AHfa]
+Hotkey=R
+Unhotkey=R
+Researchhotkey=R
+
+// Trueshot Aura
+[AEar]
+Researchhotkey=T
+
+// Starfall
+[AEsf]
+Hotkey=F
+Researchhotkey=F
+
+// Summon Warden
+[Ewar]
+Hotkey=W
+
+// Blink
+[AEbl]
+Hotkey=B
+Researchhotkey=B
+
+// Fan of Knives
+[AEfk]
+Hotkey=F
+Researchhotkey=F
+
+// Shadow Strike
+[AEsh]
+Hotkey=D
+Researchhotkey=D
+
+
+// Vengeance
+[AEsv]
+Hotkey=V
+Researchhotkey=V
+
+// Avatar of Vengeance
+[espv]
+Hotkey= 
+
+// Spirit of Vengeance
+[Avng]
+Hotkey=V
+
+
+/////////////////////////////
+//Undead Units & Abilities
+/////////////////////////////
+
+// Train Acolyte
+[uaco]
+Hotkey=C
+
+// Unsummon Building
+[Auns]
+Hotkey=U
+
+// Gather
+[Aaha]
+Hotkey=G
+Unhotkey=R
+
+// Restore
+[Arst]
+Hotkey=R
+Unhotkey=R
+
+// Train Ghoul
+[ugho]
+Hotkey=G
+
+// Cannibalize
+[Acan]
+Hotkey=C
+
+// Train Crypt Fiend
+[ucry]
+Hotkey=F
+
+// Web
+[Aweb]
+Hotkey=W
+Unhotkey=W
+
+// Burrow
+[Abur]
+Hotkey=B
+Unhotkey=B
+
+// Train Gargoyle
+[ugar]
+Hotkey=A
+CanPrioritizeAir=1
+
+// Prioritize
+[Aatp]
+Hotkey=R
+Unhotkey=R
+
+// Stone Form
+[Astn]
+Hotkey=F
+Unhotkey=F
+UnhotkeyId=Ast1
+
+// Stone Form Unhotkey Helper
+[Ast1]
+ParentId=Astn
+
+// Train Gargoyle
+[ugrm]
+Hotkey=A
+
+// Train Necromancer
+[unec]
+Hotkey=N
+
+// Raise Dead
+[Arai]
+Hotkey=R
+Unhotkey=R
+
+// Unholy Frenzy
+[Auhf]
+Hotkey=U
+
+// Incite Unholy Frenzy
+[Auuf]
+Hotkey=U
+
+// Cripple
+[Acri]
+Hotkey=C
+
+// Train Banshee
+[uban]
+Hotkey=B
+
+// Curse
+[Acrs]
+Hotkey=C
+Unhotkey=C
+
+// Anti-magic Shell
+[Aams]
+Hotkey=N
+
+// Anti-magic Shell
+[Aam2]
+Hotkey=N
+
+// Possession
+[Apos]
+Hotkey=O
+
+// Possession
+[Aps2]
+Hotkey=O
+
+
+// Train Meat Wagon
+[umtw]
+Hotkey=M
+CanAttackGround=1
+
+// Get Corpse
+[Amel]
+Hotkey=C
+Unhotkey=C
+
+// Drop All Corpses
+[Amed]
+Hotkey=D
+
+// Train Abomination
+[uabo]
+Hotkey=A
+
+// Cannibalize
+[Acn2]
+Hotkey=C
+
+// Create Obsidian Statue
+[uobs]
+Hotkey=O
+
+// Spirit Touch
+[Arpm]
+Hotkey=C
+Unhotkey=C
+
+// Essence of Blight
+[Arpl]
+Hotkey=B
+Unhotkey=B
+
+// Destroyer Form
+[Aave]
+Hotkey=T
+
+// Morph into Destroyer
+[ubsp]
+Hotkey=T
+
+// Orb of Annihilation
+[Afak]
+Hotkey=O
+Unhotkey=O
+
+// Devour Magic
+[Advm]
+Hotkey=D
+
+// Absorb Mana
+[Aabs]
+Hotkey=B
+
+// Train Frost Wyrm
+[ufro]
+Hotkey=F
+
+// Carrion Beetle
+[ucs2]
+Hotkey= 
+
+/////////////////////////////
+//Undead Bldgs, Upgrades & Abilities
+/////////////////////////////
+
+// Research Destroyer Form
+[Rusp]
+Hotkey=T
+
+// Upgrade to Unholy Strength
+[Rume]
+Hotkey=S,S,S
+
+// Upgrade to Creature Attack
+[Rura]
+Hotkey=A,A,A
+
+// Upgrade to Unholy Armor
+[Ruar]
+Hotkey=U,U,U
+
+// Upgrade to Creature Carapace
+[Rucr]
+Hotkey=C,C,C
+
+// Research Cannibalize
+[Ruac]
+Hotkey=C
+
+// Research Ghoul Frenzy
+[Rugf]
+Hotkey=Z
+
+// Research Web
+[Ruwb]
+Hotkey=W
+
+// Research Stone Form
+[Rusf]
+Hotkey=S
+
+// Necromancer Adept Training
+[Rune]
+Hotkey=E,E
+
+// Banshee Adept Training
+[Ruba]
+Hotkey=A,A
+
+// Research Freezing Breath
+[Rufb]
+Hotkey=B
+
+// Research Skeletal Longevity
+[Rusl]
+Hotkey=S
+
+// Research Disease Cloud
+[Rupc]
+Hotkey=D
+
+// Research Skeletal Mastery
+[Rusm]
+Hotkey=M
+
+// Research Burrow
+[Rubu]
+Hotkey=B
+
+// Research Exhume Corpses
+[Ruex]
+Hotkey=E
+
+// Research Backpack
+[Rupm]
+Hotkey=B
+
+// Summon Necropolis
+[unpl]
+Hotkey=N
+
+// Upgrade to Halls of the Dead
+[unp1]
+Hotkey=U
+
+// Upgrade to Black Citadel
+[unp2]
+Hotkey=U
+
+// Summon Crypt
+[usep]
+Hotkey=C
+
+// Summon Graveyard
+[ugrv]
+Hotkey=V
+
+// Summon Ziggurat
+[uzig]
+Hotkey=Z
+
+// Upgrade to Spirit Tower
+[uzg1]
+Hotkey=T
+OffensiveStructure=1
+
+// Upgrade to Nerubian Tower
+[uzg2]
+Hotkey=N
+OffensiveStructure=1
+
+// Summon Altar of Darkness
+[uaod]
+Hotkey=A
+
+// Summon Temple of the Damned
+[utod]
+Hotkey=T
+
+// Summon Slaughterhouse
+[uslh]
+Hotkey=H
+
+// Summon Sacrificial Pit
+[usap]
+Hotkey=S
+
+// Sacrifice
+[Asac]
+Hotkey=C
+
+// Summon Boneyard
+[ubon]
+Hotkey=B
+
+// Summon Tomb of Relics
+[utom]
+Hotkey=R
+
+// Sacrifice
+[Alam]
+Hotkey=C
+
+// Haunt Gold Mine
+[ugol]
+Hotkey=G
+
+/////////////////////////////
+//Undead Heroes & Abilities
+/////////////////////////////
+
+// Summon Death Knight
+[Udea]
+Hotkey=D
+
+// Death Coil
+[AUdc]
+Hotkey=C
+Researchhotkey=C
+
+// Unholy Aura
+[AUau]
+Researchhotkey=U
+
+// Death Pact
+[AUdp]
+Hotkey=E
+Researchhotkey=E
+
+// Animate Dead
+[AUan]
+Hotkey=D
+Researchhotkey=D
+
+// Animate Dead
+[AUa2]
+Hotkey=D
+Researchhotkey=D
+
+// Summon Dreadlord
+[Udre]
+Hotkey=E
+
+// Carrion Swarm
+[AUcs]
+Hotkey=C
+Researchhotkey=C
+
+// Sleep
+[AUsl]
+Hotkey=E
+Researchhotkey=E
+
+// Vampiric Aura
+[AUav]
+Researchhotkey=V
+
+// Inferno
+[AUin]
+Hotkey=N
+Researchhotkey=N
+
+// Summon Lich
+[Ulic]
+Hotkey=L
+
+// Frost Nova
+[AUfn]
+Hotkey=N
+Researchhotkey=N
+
+// Frost Armor
+[AUfu]
+Hotkey=F
+Researchhotkey=F
+
+// Dark Ritual
+[AUdr]
+Hotkey=R
+Researchhotkey=R
+
+// Death And Decay
+[AUdd]
+Hotkey=D
+Researchhotkey=D
+
+// Summon Crypt Lord
+[Ucrl]
+Hotkey=C
+
+// Impale
+[AUim]
+Hotkey=E
+Researchhotkey=E
+
+// Spiked Carapace
+[AUts]
+Researchhotkey=S
+
+// Carrion Beetles
+[AUcb]
+Hotkey=C
+Researchhotkey=C
+
+// Burrow
+[Abu2]
+Hotkey=B
+Unhotkey=B
+
+// Burrow
+[Abu3]
+Hotkey=B
+Unhotkey=B
+
+// Locust Swarm
+[AUls]
+Hotkey=L
+Researchhotkey=L
+
+//////////////////////////////////////////////////////
+// Neutral heroes & neutral hero abilities
+// Includes neutral hero summoned unit abilities
+// Does not include mercenaries or mercenary abilities
+//////////////////////////////////////////////////////
+
+/////////////////////
+// Sea Witch Abilities
+/////////////////////
+
+// Summon Sea Witch
+[Nngs]
+Hotkey=G
+
+// Activate Mana Shield
+[ANms]
+Hotkey=N
+Unhotkey=N
+Researchhotkey=N
+
+// Forked Lightning
+[ANfl]
+Hotkey=F
+Researchhotkey=F
+
+// Frost Arrows
+[ANfa]
+Hotkey=R
+Unhotkey=R
+Researchhotkey=R
+
+// Tornado
+[ANto]
+Hotkey=T
+Researchhotkey=T
+
+
+///////////////////////
+// Dark Ranger
+///////////////////////
+
+// Summon Dark Ranger
+[Nbrn]
+Hotkey=R
+
+// Black Arrow
+[ANba]
+Hotkey=B
+Researchhotkey=B
+
+// Silence
+[ANsi]
+Hotkey=E
+Researchhotkey=E
+
+// Life Drain
+[ANdr]
+Hotkey=D
+Researchhotkey=D
+
+// Charm
+[ANch]
+Hotkey=C
+Researchhotkey=C
+
+
+////////////////////////////////
+// Pandaren Brewmaster
+////////////////////////////////
+
+// Summon Brewmaster
+[Npbm]
+Hotkey=N
+
+// Breath of Fire
+[ANbf]
+Hotkey=F
+Researchhotkey=F
+
+// Drunken Brawler
+[ANdb]
+Researchhotkey=B
+
+// Drunken Haze
+[ANdh]
+Hotkey=D
+Researchhotkey=D
+
+// Storm, Earth, And Fire
+[ANef]
+Hotkey=E
+Researchhotkey=E
+
+
+//////////////////////
+//Mini-Panda Abilities
+//////////////////////
+
+// Wind Walk
+[ANwk]
+Hotkey=W
+
+// Cyclone
+[ACcy]
+Hotkey=C
+
+// Dispel Magic
+[Adsm]
+Hotkey=D
+
+// Taunt
+[ANta]
+Hotkey=T
+
+
+///////////////////////
+// Fire Lord
+///////////////////////
+
+// Summon Firelord
+[Nfir]
+Hotkey=O
+
+// Incinerate
+[ANic]
+Hotkey=C
+Researchhotkey=C
+
+// Incinerate
+[ANia]
+Hotkey=C
+Researchhotkey=C
+
+// Soul Burn
+[ANso]
+Hotkey=B
+Researchhotkey=B
+
+// Summon Lava Spawn
+[ANlm]
+Hotkey=W
+Researchhotkey=W
+
+// Volcano
+[ANvc]
+Hotkey=V
+Researchhotkey=V
+
+
+/////////////////////
+// Pit Lord
+/////////////////////
+
+// Summon Pit Lord
+[Nplh]
+Hotkey=I
+
+// Howl of Terror
+[ANht]
+Hotkey=T
+Researchhotkey=T
+
+// Rain of Fire
+[ANrf]
+Hotkey=F
+Researchhotkey=F
+
+// Cleaving Attack
+[ANca]
+Researchhotkey=C
+
+// Doom
+[ANdo]
+Hotkey=D
+Researchhotkey=D
+
+
+////////////////////////
+// Beastmaster
+////////////////////////
+
+// Summon Beastmaster
+[Nbst]
+Hotkey=S
+
+// Summon Bear
+[ANsg]
+Hotkey=B
+Researchhotkey=B
+
+// Summon Quilbeast
+[ANsq]
+Hotkey=Q
+Researchhotkey=Q
+
+// Summon Hawk
+[ANsw]
+Hotkey=W
+Researchhotkey=W
+
+// Stampede
+[ANst]
+Hotkey=T
+Researchhotkey=T
+
+// Blink
+[ANbl]
+Hotkey=B
+
+
+///////////////////////
+// Tinker
+///////////////////////
+
+// Summon Tinker
+[Ntin]
+Hotkey=Z
+
+// Summon Tinker
+[Nrob]
+Hotkey=Z
+
+// Pocket Factory
+[ANsy]
+Hotkey=F
+Researchhotkey=F
+
+// Pocket Factory
+[ANs1]
+Hotkey=F
+Researchhotkey=F
+
+// Pocket Factory
+[ANs2]
+Hotkey=F
+Researchhotkey=F
+
+// Pocket Factory
+[ANs3]
+Hotkey=F
+Researchhotkey=F
+
+// Cluster Rockets
+[ANcs]
+Hotkey=R
+Researchhotkey=R
+
+// Cluster Rockets
+[ANc1]
+Hotkey=R
+Researchhotkey=R
+
+// Cluster Rockets
+[ANc2]
+Hotkey=R
+Researchhotkey=R
+
+// Cluster Rockets
+[ANc3]
+Hotkey=R
+Researchhotkey=R
+
+// Engineering Upgrade
+[ANeg]
+Hotkey=E
+Researchhotkey=E
+
+// Robo-Goblin
+[ANrg]
+Hotkey=B
+Unhotkey=T
+Researchhotkey=B
+
+// Robo-Goblin
+[ANg1]
+Hotkey=B
+Unhotkey=T
+Researchhotkey=B
+
+// Robo-Goblin
+[ANg2]
+Hotkey=B
+Unhotkey=T
+Researchhotkey=B
+
+// Robo-Goblin
+[ANg3]
+Hotkey=B
+Unhotkey=T
+Researchhotkey=B
+
+// Demolish
+[ANde]
+Hotkey= 
+
+// Demolish - Upgrade Level 1
+[ANd1]
+Hotkey= 
+
+// Demolish - Upgrade Level 2
+[ANd2]
+Hotkey= 
+
+// Demolish - Upgrade Level 3
+[ANd3]
+Hotkey= 
+
+// Factory
+[ANfy]
+Hotkey= 
+
+// Factory - Upgrade Level 1
+[ANf1]
+Hotkey= 
+
+// Factory - Upgrade Level 2
+[ANf2]
+Hotkey= 
+
+// Factory - Upgrade Level 3
+[ANf3]
+Hotkey= 
+
+// Kaboom!
+[Asdg]
+Hotkey=B
+Unhotkey=B
+
+// Kaboom!
+[Asd2]
+Hotkey=B
+Unhotkey=B
+
+// Kaboom!
+[Asd3]
+Hotkey=B
+Unhotkey=B
+
+// Summon Clockwerk Goblin
+[ncgb]
+Hotkey= 
+
+// Summon Clockwerk Goblin
+[ncg1]
+Hotkey= 
+
+// Summon Clockwerk Goblin
+[ncg2]
+Hotkey= 
+
+// Summon Clockwerk Goblin
+[ncg3]
+Hotkey= 
+
+// Summon Pocket Factory
+[nfac]
+Hotkey= 
+
+// Summon Pocket Factory
+[nfa1]
+Hotkey= 
+
+// Summon Pocket Factory
+[nfa2]
+Hotkey= 
+
+// Rally
+[ARal]
+Hotkey=Y
+
+///////////////////////
+// Alchemist
+///////////////////////
+
+// Summon Alchemist
+[Nalc]
+Hotkey=X
+
+// Summon Alchemist
+[Nalm]
+Hotkey=X
+
+// Summon Alchemist
+[Nal2]
+Hotkey=X
+
+// Summon Alchemist
+[Nal3]
+Hotkey=X
+
+// Healing Spray
+[ANhs]
+Hotkey=E
+Researchhotkey=E
+
+// Acid Bomb
+[ANab]
+Hotkey=B
+Researchhotkey=B
+
+// Chemical Rage
+[ANcr]
+Hotkey=R
+Researchhotkey=R
+
+// Transmute
+[ANtm]
+Hotkey=T
+Researchhotkey=T
+
+
+///////////////////////
+// Items
+///////////////////////
+
+// Permanent
+// Level 1
+
+// Purchase Cloak of Shadows
+[clsd]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Gauntlets of Ogre Strength +3
+[rst1]
+Hotkey=G
+MerchantAvailable=1
+
+// Purchase Mantle of Intelligence +3
+[rin1]
+Hotkey=I
+MerchantAvailable=1
+
+// Purchase Ring of Superiority
+[rnsp]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Slippers of Agility +3
+[rag1]
+Hotkey=A
+MerchantAvailable=1
+
+// Level 2
+
+// Purchase Claws of Attack +5
+[rat6]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Gloves of Haste
+[gcel]
+Hotkey=G
+MerchantAvailable=1
+
+// Purchase Ring of Protection +4
+[rde3]
+Hotkey=52
+MerchantAvailable=1
+
+// Level 3
+
+// Purchase Circlet of Nobility
+[cnob]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Claws of Attack +8
+[rat9]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Pendant of Energy
+[penr]
+Hotkey=P
+MerchantAvailable=1
+
+// Purchase Periapt of Vitality
+[prvt]
+Hotkey=V
+MerchantAvailable=1
+
+// Purchase Ring of Protection +5
+[rde4]
+Hotkey=53
+MerchantAvailable=1
+
+// Purchase Ring of Regeneration
+[rlif]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Talisman of Evasion
+[evtl]
+Hotkey=T
+MerchantAvailable=1
+
+// Level 4
+
+// Purchase Alleria's Flute of Accuracy
+[afac]
+Hotkey=F
+MerchantAvailable=1
+
+// Purchase Belt of Giant Strength
+[bgst]
+Hotkey=B
+MerchantAvailable=1
+
+// Purchase Boots of Quel'Thalas
+[belv]
+Hotkey=E
+MerchantAvailable=1
+
+// Purchase Ring of the Archmagi
+[ram1]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Ring of the Archmagi
+[ram2]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Ring of the Archmagi
+[ram3]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Ring of the Archmagi
+[ram4]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Robe of the Magi
+[ciri]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Runed Bracers
+[brac]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Scourge Bone Chimes
+[sbch]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Sobi Mask
+[rwiz]
+Hotkey=B
+MerchantAvailable=1
+
+// Purchase the Lion Horn of Stormwind
+[lhst]
+Hotkey=H
+MerchantAvailable=1
+
+// Level 5
+
+// Purchase Ancient Janggo of Endurance
+[ajen]
+Hotkey=J
+MerchantAvailable=1
+
+// Purchase Claws of Attack +12
+[ratc]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Cloak of Flames
+[clfm]
+Hotkey=F
+MerchantAvailable=1
+
+// Purchase Helm of Valor
+[hval]
+Hotkey=H
+MerchantAvailable=1
+
+// Purchase Hood of Cunning
+[hcun]
+Hotkey=H
+MerchantAvailable=1
+
+// Purchase Khadgar's Pipe of Insight
+[kpin]
+Hotkey=P
+MerchantAvailable=1
+
+// Purchase Legion Doom-Horn
+[lgdh]
+Hotkey=L
+MerchantAvailable=1
+
+// Purchase Medallion of Courage
+[mcou]
+Hotkey=M
+MerchantAvailable=1
+
+// Purchase Warsong Battle Drums
+[ward]
+Hotkey=W
+MerchantAvailable=1
+
+// Level 6
+
+// Purchase Amulet of Spell Shield
+[spsh]
+Hotkey=A
+MerchantAvailable=1
+
+// Purchase Khadgar's Gem of Health
+[rhth]
+Hotkey=H
+MerchantAvailable=1
+
+// Purchase Orb of Darkness
+[odef]
+Hotkey=B
+MerchantAvailable=1
+
+// Purchase Pendant of Mana
+[pmna]
+Hotkey=P
+MerchantAvailable=1
+
+// Purchase Staff of Silence
+[ssil]
+Hotkey=E
+MerchantAvailable=1
+
+// Charged
+// Level 2
+
+// Purchase Crystal Ball
+[crys]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Minor Replenishment Potion
+[rej1]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Lesser Replenishment Potion
+[rej2]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Replenishment Potion
+[rej3]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Greater Replenishment Potion
+[rej4]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Sentry Wards
+[wswd]
+Hotkey=W
+MerchantAvailable=1
+
+// Purchase Wand of Illusion
+[will]
+Hotkey=I
+MerchantAvailable=1
+
+// Level 3
+
+// Purchase Potion of Greater Healing
+[pghe]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Potion of Greater Mana
+[pgma]
+Hotkey=M
+MerchantAvailable=1
+
+// Purchase Potion of Invulnerability
+[pnvu]
+Hotkey=I
+MerchantAvailable=1
+
+// Purchase Scroll of the Beast
+[sror]
+Hotkey=B
+MerchantAvailable=1
+
+// Purchase Wand of Mana Stealing
+[woms]
+Hotkey=W
+MerchantAvailable=1
+
+// Level 4
+
+// Purchase Ankh of Reincarnation
+[ankh]
+Hotkey=A
+MerchantAvailable=1
+
+// Purchase Book of the Dead
+[fgsk]
+Hotkey=B
+MerchantAvailable=1
+
+// Purchase Healing Wards
+[whwd]
+Hotkey=W
+MerchantAvailable=1
+
+// Purchase Health Stone
+[hlst]
+Hotkey=H
+MerchantAvailable=1
+
+// Purchase Mana Stone
+[mnst]
+Hotkey=M
+MerchantAvailable=1
+
+// Purchase Wand of the Wind
+[wcyc]
+Hotkey=W
+MerchantAvailable=1
+
+// Purchase Drake Egg
+[fgbd]
+Hotkey=E
+MerchantAvailable=1
+
+// Purchase Idol of the Wild
+[iotw]
+Hotkey=I
+MerchantAvailable=1
+
+// Purchase Potion of Divinity
+[pdiv]
+Hotkey=D
+MerchantAvailable=1
+
+// Purchase Potion of Divinity
+[pdi2]
+Hotkey=D
+MerchantAvailable=1
+
+// Purchase Potion of Restoration
+[pres]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Scroll of Restoration
+[sres]
+Hotkey=R
+MerchantAvailable=1
+
+// Purchase Spiked Collar
+[fgfh]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Stone Token
+[fgrg]
+Hotkey=T
+MerchantAvailable=1
+
+// Level 6
+
+// Purchase Amulet of the Wild
+[wild]
+Hotkey=A
+MerchantAvailable=1
+
+// Purchase Demonic Figurine
+[fgdg]
+Hotkey=F
+MerchantAvailable=1
+
+// Purchase Engraved Scale
+[engr]
+Hotkey=S
+MerchantAvailable=1
+
+// Purchase Ice Shard
+[shar]
+Hotkey=S
+MerchantAvailable=1
+
+// Purchase Scepter of Avarice
+[scav]
+Hotkey=S
+MerchantAvailable=1
+
+// Purchase Scepter of Mastery
+[ccmd]
+Hotkey=C
+MerchantAvailable=1
+
+// Purchase Amulet of Recall
+[amrc]
+Hotkey=R
+
+// Purchase Boots of Speed
+[bspd]
+Hotkey=S
+
+// Purchase Crown of Kings
+[ckng]
+Hotkey=K
+
+// Purchase Dagger of Escape
+[desc]
+Hotkey=E
+
+// Purchase Gem of True Seeing
+[gemt]
+Hotkey=G
+
+// Purchase Goblin Land Mines
+[gobm]
+Hotkey=L
+
+// Purchase Soul Gem
+[gsou]
+Hotkey=G
+
+// Purchase Glyph of Ultravision
+[guvi]
+Hotkey=U
+
+// Purchase Glyph of Fortification
+[gfor]
+Hotkey=F
+
+// Purchase Medusa Pebble
+[mdpb]
+Hotkey=P
+
+// Purchase Claws of Attack +3
+[rat3]
+Hotkey=K
+
+// Purchase Ring of Protection +2
+[rde1]
+Hotkey=2
+
+// Purchase Ring of Protection +3
+[rde2]
+Hotkey=P
+
+// Purchase Orb of Fire
+[ofir]
+Hotkey=F
+
+// Purchase Orb of Fire
+[ofr2]
+Hotkey=F
+
+// Purchase Orb of Frost
+[ofro]
+Hotkey=R
+
+// Purchase Orb of Lightning
+[olig]
+Hotkey=L
+
+// Purchase Orb of Lightning
+[oli2]
+Hotkey=L
+
+// Purchase Orb of Venom
+[oven]
+Hotkey=V
+
+// Purchase Orb of Corruption
+[ocor]
+Hotkey=B
+
+// Purchase Potion of Healing
+[phea]
+Hotkey=P
+
+// Purchase Potion of Invisibility
+[pinv]
+Hotkey=I
+
+// Purchase Potion of Greater Invisibility
+[pgin]
+Hotkey=I
+
+// Purchase Potion of Mana
+[pman]
+Hotkey=M
+
+// Purchase Potion of Lesser Invulnerability
+[pnvl]
+Hotkey=N
+
+// Purchase Potion of Speed
+[pspd]
+Hotkey=S
+
+// Purchase Horn of the Clouds
+[sfog]
+Hotkey=C
+
+// Purchase Rune of Lesser Healing
+[rhe1]
+Hotkey=H
+
+// Purchase Rune of Healing
+[rhe2]
+Hotkey=H
+
+// Purchase Rune of Greater Healing
+[rhe3]
+Hotkey=H
+
+// Purchase Scroll of Healing
+[shea]
+Hotkey=H
+
+// Purchase Scroll of Mana
+[sman]
+Hotkey=M
+
+// Purchase Rune of Mana
+[rman]
+Hotkey=M
+
+// Purchase Rune of Greater Mana
+[rma2]
+Hotkey=M
+
+// Purchase Scroll of Protection
+[spro]
+Hotkey=R
+
+// Purchase Rune of Restoration
+[rres]
+Hotkey=R
+
+// Purchase Scroll of Town Portal
+[stwp]
+Hotkey=T
+
+// Purchase Goblin Night Scope
+[tels]
+Hotkey=T
+
+// Purchase Tome of Agility
+[tdex]
+Hotkey=A
+
+// Purchase Tome of Experience
+[texp]
+Hotkey=E
+
+// Purchase Tome of Intelligence
+[tint]
+Hotkey=I
+
+// Purchase Tome of Power
+[tkno]
+Hotkey=P
+
+// Purchase Tome of Strength
+[tstr]
+Hotkey=S
+
+// Purchase Warsong Battle Drums
+[war2]
+Hotkey=W
+
+// Purchase Wand of Negation
+[wneg]
+Hotkey=N
+
+// Purchase Rune of Dispel Magic
+[rdis]
+Hotkey=D
+
+// Purchase Rune of the Watcher
+[rwat]
+Hotkey=W
+
+// Purchase Drake Egg
+[fgrd]
+Tip=Purchase Drake Egg
+Hotkey=E
+
+// Purchase Rod of Necromancy
+[rnec]
+Hotkey=R
+
+// Purchase Anti-magic Potion
+[pams]
+Hotkey=A
+
+// Purchase Ring of Protection +1
+[rde0]
+Hotkey=1
+
+// Purchase Healing Salve
+[hslv]
+Hotkey=H
+
+// Purchase Clarity Potion
+[pclr]
+Hotkey=Y
+
+// Purchase Lesser Clarity Potion
+[plcl]
+Hotkey=C
+
+// Purchase Lesser Scroll of Replenishment
+[rej5]
+Hotkey=R
+
+// Purchase Greater Scroll of Replenishment
+[rej6]
+Hotkey=R
+
+// Purchase Scroll of Regeneration
+[sreg]
+Hotkey=R
+
+// Purchase Flare Gun
+[fgun]
+Hotkey=F
+
+// Purchase Potion of Omniscience
+[pomn]
+Hotkey=O
+
+// Purchase Glyph of Omniscience
+[gomn]
+Hotkey=O
+
+// Purchase Wand of Neutralization
+[wneu]
+Hotkey=N
+
+// Purchase Spider Silk Broach
+[silk]
+Hotkey=S
+
+// Purchase Monster Lure
+[lure]
+Hotkey=L
+
+// Purchase Sacrificial Skull
+[skul]
+Hotkey=K
+
+// Purchase Moonstone
+[moon]
+Hotkey=N
+
+// Purchase Vampiric Potion
+[vamp]
+Hotkey=V
+
+// Purchase Tiny Castle
+[tcas]
+Hotkey=A
+
+// Purchase Tiny Great Hall
+[tgrh]
+Hotkey=G
+
+// Purchase Ivory Tower
+[tsct]
+Hotkey=V
+
+// Purchase Wand of Shadowsight
+[wshs]
+Hotkey=W
+
+// Purchase Tome of Retraining
+[tret]
+Hotkey=O
+
+// Purchase Staff of Negation
+[sneg]
+Hotkey=N
+
+// Purchase Staff of Teleportation
+[stel]
+Hotkey=E
+
+// Purchase Staff of Preservation
+[spre]
+Hotkey=E
+
+// Purchase Mechanical Critter
+[mcri]
+Hotkey=E
+
+// Purchase Rune of Shielding
+[rsps]
+Hotkey=S
+
+// Purchase Spell Book
+[sbok]
+Hotkey=B
+
+// Purchase Staff of Sanctuary
+[ssan]
+Hotkey=N
+
+// Purchase Scroll of Speed
+[shas]
+Hotkey=S
+
+// Purchase Rune of Speed
+[rspd]
+Hotkey=D
+
+// Purchase Dust of Appearance
+[dust]
+Hotkey=D
+
+// Purchase Orb of Slow
+[oslo]
+Hotkey=S
+
+// Purchase Rune of Rebirth
+[rreb]
+Hotkey=B
+
+// Purchase Diamond of Summoning
+[dsum]
+Hotkey=D
+
+// Purchase Shadow Orb
+[sor1]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor2]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor3]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor4]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor5]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor6]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor7]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor8]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sor9]
+Hotkey=O
+
+// Purchase Shadow Orb
+[sora]
+Hotkey=O
+
+// Purchase Shadow Orb Fragment
+[sorf]
+Hotkey=O
+
+// Purchase Frost Wyrm Skull Shield
+[fwss]
+Hotkey=F
+
+// Purchase Gem Fragment
+[gmfr]
+Hotkey=G
+
+// Purchase Shamanic Totem
+[shtm]
+Hotkey=H
+
+// Purchase Essence of Aszune
+[esaz]
+Hotkey=E
+
+// Purchase Note to Jaina Proudmoore
+[jpnt]
+Hotkey=J
+
+// Purchase Shimmerweed
+[shwd]
+Hotkey=S
+
+// Purchase Orb of Kil'jaeden
+[gldo]
+Hotkey=K
+
+// Purchase Wirt's Leg
+[wtlg]
+Hotkey=L
+
+// Purchase Wirt's Other Leg
+[wolg]
+Hotkey=O
+
+// Purchase Tiny Blacksmith
+[tbsm]
+Hotkey=B
+
+// Purchase Tiny Farm
+[tfar]
+Hotkey=F
+
+// Purchase Tiny Lumber Mill
+[tlum]
+Hotkey=R
+
+// Purchase Tiny Barracks
+[tbar]
+Hotkey=B
+
+// Purchase Tiny Altar of Kings
+[tbak]
+Hotkey=K
+
+// Purchase Magic Key Chain
+[mgtk]
+Hotkey=K
+
+// Purchase Staff of Reanimation
+[stre]
+Hotkey=R
+
+// Purchase Sacred Relic
+[horl]
+Hotkey=S
+
+// Purchase Helm of Battlethirst
+[hbth]
+Hotkey=B
+
+// Purchase Bladebane Armor
+[blba]
+Hotkey=A
+
+// Purchase Runed Gauntlets
+[rugt]
+Hotkey=R
+
+// Purchase Firehand Gauntlets
+[frhg]
+Hotkey=F
+
+// Purchase Gloves of Spell Mastery
+[gvsm]
+Hotkey=S
+
+// Purchase Crown of the Deathlord
+[crdt]
+Hotkey=D
+
+// Purchase Arcane Scroll
+[arsc]
+Hotkey=A
+
+// Purchase Scroll of the Unholy Legion
+[scul]
+Hotkey=I
+
+// Purchase Tome of Sacrifices
+[tmsc]
+Hotkey=T
+
+// Purchase Drek'thar's Spellbook
+[dtsb]
+Hotkey=D
+
+// Purchase Grimoire of Souls
+[grsl]
+Hotkey=G
+
+// Purchase Arcanite Shield
+[arsh]
+Hotkey=A
+
+// Purchase Shield of the Deathlord
+[shdt]
+Hotkey=D
+
+// Purchase Shield of Honor
+[shhn]
+Hotkey=H
+
+// Purchase Enchanted Shield
+[shen]
+Hotkey=E
+
+// Purchase Thunderlizard Diamond
+[thdm]
+Hotkey=T
+
+// Purchase Clockwork Penguin
+[stpg]
+Hotkey=P
+
+// Purchase Shimmerglaze Roast
+[shrs]
+Hotkey=S
+
+// Purchase Bloodfeather's Heart
+[bfhr]
+Hotkey=B
+
+// Purchase Celestial Orb of Souls
+[cosl]
+Hotkey=C
+
+// Purchase Shaman Claws
+[shcw]
+Hotkey=S
+
+// Purchase Searing Blade
+[srbd]
+Hotkey=B
+
+// Purchase Frostguard
+[frgd]
+Hotkey=F
+
+// Purchase Enchanted Vial
+[envl]
+Hotkey=E
+
+// Purchase Rusty Mining Pick
+[rump]
+Hotkey=R
+
+// Purchase Mogrin's Report
+[mort]
+Hotkey=M
+
+// Purchase Serathil
+[srtl]
+Hotkey=S
+
+// Purchase Sturdy War Axe
+[stwa]
+Hotkey=W
+
+// Purchase Killmaim
+[klmm]
+Hotkey=K
+
+// Purchase Scepter of the Sea
+[rots]
+Hotkey=R
+
+// Purchase Ancestral Staff
+[axas]
+Hotkey=A
+
+// Purchase Mindstaff
+[mnsf]
+Hotkey=T
+
+// Purchase Scepter of Healing
+[schl]
+Hotkey=H
+
+// Purchase Assassin's Blade
+[asbl]
+Hotkey=A
+
+// Purchase Keg of Ale
+[kgal]
+Hotkey=K
+
+// Purchase Thunder Phoenix Egg
+[dphe]
+Hotkey=H
+
+// Purchase Keg of Thunderwater
+[dkfw]
+Hotkey=K
+
+// Purchase Thunderbloom Bulb
+[dthb]
+Hotkey=T
+
+// Purchase Ritual Dagger
+[ritd]
+Hotkey=A
+
+// Reveal
+[Andt]
+Hotkey=R
+
+// Build Goblin Merchant
+[ngme]
+Hotkey= 
+
+// Build Black Dragon Roost
+[ndrk]
+Hotkey= 
+
+// Build Blue Dragon Roost
+[ndru]
+Hotkey= 
+
+// Build Bronze Dragon Roost
+[ndrz]
+Hotkey= 
+
+// Build Green Dragon Roost
+[ndrg]
+Hotkey= 
+
+// Build Red Dragon Roost
+[ndrr]
+Hotkey= 
+
+// Build Nether Dragon Roost
+[ndro]
+Hotkey= 
+
+// Build Goblin Laboratory
+[ngad]
+Hotkey= 
+
+// Build Goblin Shipyard
+[nshp]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmer]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr2]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr3]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr4]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr5]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr6]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr7]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr8]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr9]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmr0]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmra]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmrb]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmrc]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmrd]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmre]
+Hotkey= 
+
+// Build Mercenary Camp
+[nmrf]
+Hotkey= 
+
+// Build Tavern
+[ntav]
+Hotkey= 
+
+// Summon Black Dragon Whelp
+[nbdr]
+Hotkey=W
+
+// Summon Black Drake
+[nbdk]
+Hotkey=E
+
+// Summon Black Dragon
+[nbwm]
+Hotkey=D
+
+// Devour
+[ACdv]
+Hotkey=D
+
+// Summon Blue Dragon Whelp
+[nadw]
+Hotkey=W
+
+// Summon Blue Drake
+[nadk]
+Hotkey=E
+
+// Summon Blue Dragon
+[nadr]
+Hotkey=D
+
+// Summon Bronze Dragon Whelp
+[nbzw]
+Hotkey=W
+
+// Summon Bronze Drake
+[nbzk]
+Hotkey=E
+
+// Summon Bronze Dragon
+[nbzd]
+Hotkey=D
+
+// Summon Green Dragon Whelp
+[ngrw]
+Hotkey=W
+
+// Summon Green Drake
+[ngdk]
+Hotkey=E
+
+// Summon Green Dragon
+[ngrd]
+Hotkey=D
+
+// Summon Red Dragon Whelp
+[nrdk]
+Hotkey=W
+
+// Summon Red Drake
+[nrdr]
+Hotkey=E
+
+// Summon Red Dragon
+[nrwm]
+Hotkey=D
+
+// Summon Nether Dragon Hatchling
+[nnht]
+Hotkey=H
+
+// Summon Nether Drake
+[nndk]
+Hotkey=E
+
+// Summon Nether Dragon
+[nndr]
+Hotkey=D
+
+// Hire Sapper
+[ngsp]
+Hotkey=S
+
+// Kaboom!
+[Asds]
+Hotkey=B
+Unhotkey=B
+
+// Hire Zeppelin
+[nzep]
+Hotkey=Z
+
+// Hire Shredder
+[ngir]
+Hotkey=G
+
+// Gather
+[Ahr3]
+Hotkey=G
+Unhotkey=E
+
+// Hire Transport Ship
+[nbot]
+Hotkey=T
+
+// Load
+[Slo3]
+Hotkey=L
+
+// Hire Forest Troll Berserker
+[nftb]
+Hotkey=B
+
+// Hire Forest Troll Shadow Priest
+[nfsp]
+Hotkey=P
+
+// Heal
+[Anh1]
+Hotkey=E
+Unhotkey=E
+
+// Abolish Magic
+[ACdm]
+Hotkey=B
+Unhotkey=B
+
+// Hire Ogre Mauler
+[nogm]
+Hotkey=M
+
+// Summon Mud Golem
+[ngrk]
+Hotkey=U
+
+// Slow
+[ACsw]
+Hotkey=W
+
+// Hire Gnoll Brute
+[ngnb]
+Hotkey=B
+
+// Hire Gnoll Warden
+[ngnw]
+Hotkey=W
+
+// Purge
+[ACpu]
+Hotkey=G
+
+// Hire Ogre Magi
+[nomg]
+Hotkey=G
+
+// Bloodlust
+[ACbb]
+Hotkey=B
+Unhotkey=B
+
+// Hire Ice Troll Priest
+[nitp]
+Hotkey=P
+
+// Hire Ice Troll Berserker
+[nits]
+Hotkey=B
+
+// Hire Centaur Archer
+[ncea]
+Hotkey=A
+
+// Hire Centaur Outrunner
+[ncen]
+Hotkey=O
+
+// Hire Quillboar Hunter
+[nqbh]
+Hotkey=H
+
+// Hire Harpy Windwitch
+[nhrw]
+Hotkey=W
+
+// Faerie Fire
+[ACff]
+Hotkey=R
+Unhotkey=R
+
+// Hire Dark Troll Shadow Priest
+[ndtp]
+Hotkey=P
+
+// Hire Dark Troll Berserker
+[ndtb]
+Hotkey=B
+
+// Summon Giant Wolf
+[nwlg]
+Hotkey=W
+
+// Hire Satyr Shadowdancer
+[nsts]
+Hotkey=S
+
+// Curse
+[ACcs]
+Hotkey=C
+Unhotkey=C
+
+// Hire Murloc Flesheater
+[nmfs]
+Hotkey=M
+
+// Cannibalize
+[ACcn]
+Hotkey=C
+
+// Summon Spitting Spider
+[nssp]
+Hotkey=P
+
+// Summon Sludge Monstrosity
+[nsln]
+Hotkey=L
+
+// Summon Nerubian Warrior
+[nnwa]
+Hotkey=W
+
+// Summon Frost Revenant
+[nrvs]
+Hotkey=F
+
+// Blizzard
+[ACbz]
+Hotkey=B
+
+// Summon Nerubian Seer
+[nnwr]
+Hotkey=N
+
+// Raise Dead
+[ACrd]
+Hotkey=R
+Unhotkey=R
+
+// Abolish Magic
+[ACdm]
+Hotkey=B
+Unhotkey=B
+
+// Hire Rogue
+[nrog]
+Hotkey=R
+
+// Hire Assassin
+[nass]
+Hotkey=A
+
+// Hire Kobold Geomancer
+[nkog]
+Hotkey=G
+
+// Hire Forest Troll High Priest
+[nfsh]
+Hotkey=H
+
+// Heal
+[Anh2]
+Hotkey=E
+Unhotkey=E
+
+// Inner Fire
+[ACif]
+Hotkey=F
+Unhotkey=F
+
+// Abolish Magic
+[ACd2]
+Hotkey=B
+Unhotkey=B
+
+// Hire Kobold Tunneler
+[nkot]
+Hotkey=T
+
+// Hire Kobold Taskmaster
+[nkol]
+Hotkey=K
+
+// Hire Burning Archer
+[nskf]
+Hotkey=B
+
+// Searing Arrows
+[ACsa]
+Hotkey=R
+Unhotkey=R
+
+// Summon Wildkin
+[nowb]
+Hotkey=W
+
+// Summon Frost Revenant
+[nrvs]
+Hotkey=F
+
+// Hire Mur'gul Blood-Gill
+[nmbg]
+Hotkey=B
+
+// Hire Stormreaver Hermit
+[nsrh]
+Hotkey=H
+
+// Hire Mur'gul Snarecaster
+[nmsn]
+Hotkey=S
+
+// Summon Skeletal Orc Grunt
+[nsog]
+Hotkey=G
+
+// Hire Tuskarr Healer
+[ntkh]
+Hotkey=H
+
+// Hire Blue Dragonspawn Warrior
+[nbdw]
+Hotkey=W
+
+// Hire Unbroken Darkweaver
+[nubw]
+Hotkey=D
+
+// Unholy Frenzy
+[ACuf]
+Hotkey=U
+
+// Hire Draenei Disciple
+[ndrm]
+Hotkey=D
+
+// Hire Bloodfiend
+[nfgb]
+Hotkey=B
+
+// Hire Voidwalker
+[nvdw]
+Hotkey=V
+
+// Cold Arrows
+[ACcw]
+Hotkey=C
+Unhotkey=C
+
+// Hire Bloodfiend
+[nfgb]
+Hotkey=B
+
+// Summon Storm
+[npn2]
+Hotkey=T
+
+// Summon Earth
+[npn3]
+Hotkey=E
+
+// Spirit Bear
+[ngz3]
+Hotkey= 
+
+// Dire Quilbeast
+[nqb2]
+Hotkey= 
+
+// Frenzy
+[Afzy]
+Hotkey=F
+Unhotkey=F
+
+// Summon Doom Guard
+[nbal]
+Hotkey= 
+
+// Summon Doom Guard
+[nba2]
+Hotkey= 
+
+// Cripple
+[ACcr]
+Hotkey=C
+
+// Dispel Magic
+[Adsm]
+Hotkey=D
+
+// War Stomp
+[Awrs]
+Hotkey=T
+
+// Rain of Fire
+[ACrf]
+Hotkey=F
+
+// Hire Furbolg Ursa Warrior
+[nfra]
+Hotkey= 
+
+// Hire Furbolg Tracker
+[nfrb]
+Hotkey= 
+
+// Summon Rock Golem
+[ngst]
+Hotkey= 
+
+// Hurl Boulder
+[ACtb]
+Hotkey=B
+
+// Summon Fel Stalker
+[nfel]
+Hotkey= 
+
+// Mana Burn
+[Ambb]
+Hotkey=B
+
+// Hire Blue Dragonspawn Overseer
+[nbdo]
+Hotkey= 
+
+// Breath of Frost
+[ACbf]
+Hotkey=F
+
+// Summon Ice Revenant
+[nrvi]
+Hotkey= 
+
+// Frost Nova
+[ACfn]
+Hotkey=N
+
+// Item Slot 1
+[itm1]
+Hotkey=103
+GameCommand=1
+
+// Item Slot 2
+[itm2]
+Hotkey=104
+GameCommand=1
+
+// Item Slot 3
+[itm3]
+Hotkey=100
+GameCommand=1
+
+// Item Slot 4
+[itm4]
+Hotkey=101
+GameCommand=1
+
+// Item Slot 5
+[itm5]
+Hotkey=97
+GameCommand=1
+
+// Item Slot 6
+[itm6]
+Hotkey=98
+GameCommand=1
+
+// First Hero
+[her1]
+Hotkey=112
+GameCommand=1
+
+// Second Hero
+[her2]
+Hotkey=113
+GameCommand=1
+
+// Third Hero
+[her3]
+Hotkey=114
+GameCommand=1
+
+// Toggle Quest Log
+[QLog]
+Hotkey=120
+MenuCommand=1
+
+// Toggle Game Menu
+[Menu]
+Hotkey=121
+MenuCommand=1
+
+// Toggle Allies
+[Ally]
+Hotkey=122
+MenuCommand=1
+
+// Toggle Chat
+[Chat]
+Hotkey=123
+MenuCommand=1
+
+// Quick Save
+[QSav]
+Hotkey=117
+MenuCommand=1
+
+// End Game Menu
+[MEnd]
+Hotkey=81
+MenuCommand=1
+Modifier=Alt
+
+// Options Menu
+[MOpt]
+Hotkey=79
+MenuCommand=1
+Modifier=Alt
+
+// Save Menu
+[MSav]
+Hotkey=83
+MenuCommand=1
+Modifier=Alt
+
+// Load Menu
+[MLod]
+Hotkey=76
+MenuCommand=1
+Modifier=Alt
+
+// Help Menu
+[MHlp]
+Hotkey=72
+MenuCommand=1
+Modifier=Alt
+
+// Toggle Music
+[TMus]
+Hotkey=77
+MenuCommand=1
+Modifier=Ctrl
+
+// Toggle SFX
+[TSFX]
+Hotkey=83
+MenuCommand=1
+Modifier=Ctrl
+
+// Ctrl Group 1
+[Ctr1]
+Hotkey=49
+CtrlGroupCommand=1
+
+// Ctrl Group 2
+[Ctr2]
+Hotkey=50
+CtrlGroupCommand=1
+
+// Ctrl Group 3
+[Ctr3]
+Hotkey=51
+CtrlGroupCommand=1
+
+// Ctrl Group 4
+[Ctr4]
+Hotkey=52
+CtrlGroupCommand=1
+
+// Ctrl Group 5
+[Ctr5]
+Hotkey=53
+CtrlGroupCommand=1
+
+// Ctrl Group 6
+[Ctr6]
+Hotkey=54
+CtrlGroupCommand=1
+
+// Ctrl Group 7
+[Ctr7]
+Hotkey=55
+CtrlGroupCommand=1
+
+// Ctrl Group 8
+[Ctr8]
+Hotkey=56
+CtrlGroupCommand=1
+
+// Ctrl Group 9
+[Ctr9]
+Hotkey=57
+CtrlGroupCommand=1
+
+// Ctrl Group 10
+[Ctr0]
+Hotkey=48
+CtrlGroupCommand=1
+
+// Switch Subgroups
+[sbgp]
+Hotkey=9
+GameCommand=1
+
+// Select Idle Workers
+[sidw]
+Hotkey=192
+GameCommand=1
+
+// Minimap Ping
+[mpng]
+Hotkey=71
+GameCommand=1
+Modifier=Alt
+
+// Toggle Minimap Terrain
+[TMtr]
+Hotkey=84
+GameCommand=1
+Modifier=Alt
+
+// Set Ally Color Mode
+[alcm]
+Hotkey=65
+GameCommand=1
+Modifier=Alt
+
+// Toggle Minimap Creep Display
+[TMcd]
+Hotkey=82
+GameCommand=1
+Modifier=Alt
+
+// Toggle Formation Movement
+[TFmv]
+Hotkey=70
+GameCommand=1
+Modifier=Alt
+
+// Toggle Ally Healthbars
+[TAHb]
+Hotkey=219
+GameCommand=1
+
+// Toggle Enemy Healthbars
+[TEHb]
+Hotkey=221
+GameCommand=1
+
+// Cycle Town Centers
+[ctcr]
+Hotkey=8
+CameraCommand=1
+
+// Center on Last Notification
+[clnt]
+Hotkey=32
+CameraCommand=1
+
+// Center on Active Portrait
+[capt]
+Hotkey=67
+CameraCommand=1
+Modifier=Ctrl_or_Alt
+
+// Zoom In
+[zmin]
+Hotkey=33
+CameraCommand=1
+
+// Zoom Out
+[zmou]
+Hotkey=34
+CameraCommand=1
+
+// Reset Zoom Level
+[rezm]
+Hotkey=116
+CameraCommand=1
+
+// Rotate Camera Left
+[rocl]
+Hotkey=45
+CameraCommand=1
+
+// Rotate Camera Right
+[rocr]
+Hotkey=46
+CameraCommand=1
+
+// Move Camera Forward
+[mvcf]
+Hotkey=38
+CameraCommand=1
+
+// Move Camera Backward
+[mvcb]
+Hotkey=40
+CameraCommand=1
+
+// Move Camera Left
+[mvcl]
+Hotkey=37
+CameraCommand=1
+
+// Move Camera Right
+[mvcr]
+Hotkey=39
+CameraCommand=1
+
+// Toggle Heroes Panel
+[THer]
+Hotkey=72
+ObserverCommand=1
+
+// Toggle Statistics Panel
+[TSta]
+Hotkey=84
+ObserverCommand=1
+
+// Toggle Production/Units Queue
+[TPUQ]
+Hotkey=81
+ObserverCommand=1
+
+// Toggle Selection Panel
+[TSel]
+Hotkey=83
+ObserverCommand=1
+
+// Toggle Minimap Panel
+[TMap]
+Hotkey=77
+ObserverCommand=1
+
+// Toggle Time of Day Indicator
+[TToD]
+Hotkey=68
+ObserverCommand=1
+
+// Toggle All Panels
+[TAll]
+Hotkey=65
+ObserverCommand=1
+
+// Production Queue Mode
+[SPQM]
+Hotkey=80
+ObserverCommand=1
+Modifier=Alt
+
+// Units List Mode
+[SULM]
+Hotkey=85
+ObserverCommand=1
+Modifier=Alt
+
+// Toggle Replay Panel
+[TRpl]
+Hotkey=82
+ReplayCommand=1
+
+// Toggle Pause / Play
+[TPPl]
+Hotkey=80
+ReplayCommand=1
+
+// Increase Game Speed
+[InGS]
+Hotkey=187
+ReplayCommand=1
+
+// Decrease Game Speed
+[DeGS]
+Hotkey=189
+ReplayCommand=1
+
+// Toggle Fog of War
+[TFoW]
+Hotkey=100
+ReplayCommand=1
+
+// Toggle Auto Camera
+[TAuC]
+Hotkey=101
+ReplayCommand=1
