@@ -469,6 +469,12 @@ def build():
         print('WARNING: data/aoe2_icons.json missing; keyboard ability-icon overlay disabled '
               '(run data/gen_aoe2_icons.py)')
     try:
+        # command id -> command-card grid slot (0-14 in a 5-wide grid); optional so a
+        # checkout without it still builds -- the card-grid panel is just disabled then.
+        data['positions'] = json.load(open(os.path.join(_DATA_DIR, 'positions.json'), encoding='utf-8'))
+    except FileNotFoundError:
+        print('WARNING: data/positions.json missing; command-card grid panel disabled')
+    try:
         # Bundled default profile (both halves of an AoE2 profile) for the one-click
         # "Load defaults" button.  .hkp is binary (zip/deflate), so base64 it into the
         # json payload; module.js loadDefault decodes + parses both at runtime.

@@ -123,9 +123,14 @@ A game module supplies, behind a small interface:
   command card, rendered on the keyboard) for the **selected** card, and as a temporary **hover**
   preview when the pointer is over a command row or a group heading (the collapse or 👁 button) — the
   hovered group takes precedence and reverts to the selected card on mouse-out. A game without it
-  (AoE2) shows no icons. The URL is resolved relative to the built page, so games that use image
-  assets ship them next to `site/<game>/index.html` (WC3 copies an `icons/` folder) rather than
-  inlining them.
+  shows no icons. The URL is resolved relative to the built page, so games that use image
+  assets ship them next to `site/<game>/index.html` (WC3 and AoE2 each copy an `icons/` folder) rather
+  than inlining them.
+- **slot (optional)** — `slot(rec) → 0..14 | null`: the record's slot in its building's in-game 5×3
+  command card (`row = slot//5`, `col = slot%5`). When a game supplies it, selecting/hovering a card
+  whose commands have slots renders that card as a grid panel beside the keyboard (each command's icon +
+  bound key in its real slot), tracking the same selected/hover card as `icon`. `null` for records with
+  no mapped slot; a group with no slotted records shows no panel. AoE2 supplies it (`positions.json`).
 - **meta** — display name, file label/accept, load/save help copy, and flags
   (`multiple`, `usesProfileName`, `hasChroniclesToggle`, and optional `defaultsLabel` for the
   "load defaults" button, …). The engine's `applyMeta()` paints this copy into the shell so

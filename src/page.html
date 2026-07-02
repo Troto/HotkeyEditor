@@ -144,6 +144,21 @@
   .kbkey.kbicon .lbl { position: absolute; top: 0; left: 1px; z-index: 1; font-size: 9px;
                        line-height: 1.15; font-weight: 700; color: #fff;
                        text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 2px #000; }
+  /* command-card grid panel (right gutter, grid col 3): when a building command card is
+     selected/hovered, render its in-game 5x3 card with each mapped command's icon in its real
+     slot (GAME.slot). Sits above the interaction guide (both col 3, stacked by DOM order). */
+  .cardpanel { grid-column: 3; min-width: 0; margin-left: 18px; margin-bottom: 14px; }
+  .cardpanel h3 { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
+  .cardgrid { display: grid; grid-template-columns: repeat(5, 44px); grid-auto-rows: 44px; gap: 3px; }
+  .cardslot { border: 1px solid #2c313d; border-radius: 5px; background: #11141b; position: relative; }
+  .cardslot.filled { border-color: #3a5a86; }
+  .cardslot img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; border-radius: 4px; }
+  .cardslot .sk { position: absolute; bottom: 0; right: 1px; z-index: 1; font-size: 9px; line-height: 1.15;
+                  font-weight: 700; color: #fff; text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 2px #000; }
+  /* a slot with no icon but a bound command still shows its key, centred */
+  .cardslot .sk.noimg { inset: 0; display: flex; align-items: center; justify-content: center; text-align: center;
+                        white-space: normal; }
+  .cardslot.hl { outline: 2px solid var(--key-sel); outline-offset: 1px; }
   /* interaction guide in the right gutter (grid col 3), mirroring the conflict panel on the left */
   .khelp { grid-column: 3; min-width: 0; margin-left: 18px; font-size: 12px; color: #9aa3b2; }
   .khelp h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
@@ -322,6 +337,7 @@
     <div class="kbstage">
       <aside class="cpanel" id="conflictpanel"></aside>
       <div class="kb" id="kb"></div>
+      <aside class="cardpanel" id="cardpanel" style="display:none"></aside>
       <aside class="khelp">
         <h3>How it works</h3>
         <div class="khsec khrow">
@@ -696,6 +712,7 @@ function clearHighlight(){   // purely visual; does not touch the selectedGroup 
   document.querySelectorAll('.cmd.selcmd').forEach(el=>el.classList.remove('selcmd'));
   document.querySelectorAll('.ghighlight.selgroup').forEach(el=>el.classList.remove('selgroup'));
   clearGroupIcons();
+  paintCardGrid();          // reflect the (possibly now-empty) selection in the card-grid panel
 }
 // Ability-card icons on the keyboard: when a single command card (group) is selected, overlay each
 // of its commands' icons on the key it's bound to.  Opt-in per game via GAME.icon(rec) -> url|null;
@@ -722,10 +739,54 @@ function showGroupIcons(group){
 // Recomputed (clear + repaint) whenever hover or selection changes.
 function paintCardIcons(){
   clearGroupIcons();
+  paintCardGrid();                 // the card-grid panel tracks the same selected/hovered card
   const name=hoverGroupName||selectedGroup;
   if(!name) return;
   const g=groupedView.find(x=>x.name===name);
   if(g) showGroupIcons(g);
+}
+// Command-card grid panel: render the active building card's in-game 5x3 grid (right gutter),
+// placing each of its commands' icon + bound key into the real slot from GAME.slot(rec).  Opt-in
+// per game via GAME.slot(rec) -> 0..14 | null.  Only building cards have slotted commands, so the
+// panel stays hidden for globals/unit/build groups (every rec's slot is null).  Repainted from
+// paintCardIcons() on every select/hover change, so it always matches the keyboard overlay.
+function paintCardGrid(){
+  const panel=document.getElementById('cardpanel'); if(!panel) return;
+  const hide=()=>{ panel.style.display='none'; panel.innerHTML=''; };
+  if(!GAME.slot) return hide();
+  const name=hoverGroupName||selectedGroup;
+  const g=name && groupedView.find(x=>x.name===name);
+  if(!g) return hide();
+  // bucket the group's recs by their card slot; a slot can hold several (civ-variant commands
+  // that share one in-game button, e.g. Battering Ram / Armored Elephant both slot 0).
+  const bySlot=new Map();
+  g.recs.forEach(r=>{ const s=GAME.slot(r); if(s==null) return;
+    (bySlot.get(s)||bySlot.set(s,[]).get(s)).push(r); });
+  if(!bySlot.size) return hide();                  // not a building card -> no panel
+  panel.innerHTML='<h3>'+esc(name)+' — command card</h3>';
+  const grid=document.createElement('div'); grid.className='cardgrid';
+  for(let s=0;s<15;s++){
+    const cell=document.createElement('div'); cell.className='cardslot';
+    const recs=bySlot.get(s);
+    if(recs){
+      cell.classList.add('filled');
+      const icRec=recs.find(r=>GAME.icon&&GAME.icon(r));   // first variant with an icon
+      const url=icRec&&GAME.icon(icRec);
+      const bound=recs.find(r=>r.e.code)||recs[0];         // first bound variant for the key label
+      if(url){ const img=document.createElement('img'); img.src=url; img.alt=''; img.loading='lazy'; cell.appendChild(img); }
+      const key=comboLabel(bound.e);
+      const sk=document.createElement('span'); sk.className='sk'+(url?'':' noimg'); sk.textContent=key;
+      cell.appendChild(sk);
+      cell.title=recs.map(r=>GAME.recName(r)+' — '+comboLabel(r.e)).join('\n');
+      // preview the bound key on the keyboard; kept self-contained (no hoverGroupName change)
+      // so it doesn't repaint/rebuild the grid out from under the cursor mid-hover.
+      cell.onmouseenter=()=>{ cell.classList.add('hl'); previewKeys(bound.e); };
+      cell.onmouseleave=()=>{ cell.classList.remove('hl'); clearPreviewKeys(); };
+    }
+    grid.appendChild(cell);
+  }
+  panel.appendChild(grid);
+  panel.style.display='';
 }
 // Hover-preview a whole group's card icons (used by command-row hover and the group-heading
 // buttons); clearHover() reverts to whatever card is selected.
@@ -747,12 +808,18 @@ function hlRec(r){
   if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-mod'));
   if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-mod'));
 }
-function hoverRec(r){      // request 6: lighter preview shade + this command's whole card's icons
-  const e=r.e;
+// paint the lighter "hover preview" shade on a combo's key + modifiers (no state change)
+function previewKeys(e){
   if(e.code) (keyEls['k'+e.code]||[]).forEach(el=>el.classList.add('hlh'));
   if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-modh'));
+}
+function clearPreviewKeys(){
+  document.querySelectorAll('.kbkey.hlh,.kbkey.hl-modh').forEach(el=>el.classList.remove('hlh','hl-modh'));
+}
+function hoverRec(r){      // request 6: lighter preview shade + this command's whole card's icons
+  previewKeys(r.e);
   hoverGroup(GAME.groupOf(r));   // preview the icons of the whole group this action belongs to (canonical group name, as buildModel groups by)
 }
 // reverse of hoverRec: hovering a key highlights every list row bound to it (no filtering)

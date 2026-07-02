@@ -276,6 +276,7 @@ let cardData = null;         // our own {byId:{id:[group,ctx]}, chronicles, hidd
 let chronIds = new Set();    // command ids known to be Chronicles content
 let hiddenIds = new Set();   // command ids always hidden (e.g. the redundant generic "Build")
 let ICONS = {};              // command id -> ability-card icon basename (data/aoe2_icons.json)
+let POSITIONS = {};          // command id -> command-card grid slot 0-14 (data/positions.json)
 let DEFAULTS = null;         // bundled default profile {profile,base} as base64 .hkp bytes
 function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
 
@@ -293,6 +294,15 @@ function recName(r){
 function iconOf(r){
   const b = r && ICONS[r.id];
   return b ? 'icons/' + b + '.png' : null;
+}
+// Command-card grid slot for the card-grid panel (engine's optional GAME.slot hook): the
+// 0-14 position (row = slot/5, col = slot%5) this command occupies in its building's in-game
+// command card (data/positions.json).  null for the many commands with no mapped slot
+// (command actions, line-upgrade techs, generic unique-unit slots, and every non-card global)
+// -- the panel only renders for a card whose commands have slots.
+function slotOf(r){
+  const s = r && POSITIONS[r.id];
+  return (s === undefined || s === null) ? null : s;
 }
 
 // ---- file menus + editable records ----
@@ -610,6 +620,7 @@ GAMES.aoe2 = {
     chronIds = new Set((d.card&&d.card.chronicles)||[]);
     hiddenIds = new Set((d.card&&d.card.hidden)||[]);
     ICONS = d.icons || {};
+    POSITIONS = d.positions || {};
     DEFAULTS = d.defaults || null;
   },
   fileStatus: fileStatus,        // load-status chips for the toolbar (doc, name) -> html
@@ -620,6 +631,7 @@ GAMES.aoe2 = {
   classify: ctxClassify,         // do two same-combo recs clash? -> tier | null
   recName: recName,              // display name for a rec
   icon: iconOf,                  // ability-card icon overlaid on the keyboard when a card is selected/hovered
+  slot: slotOf,                  // command-card grid slot (0-14) for the card-grid panel, or null
   baseName: baseName,            // display name for a command id
   ctxLabel: ctxLabel,              // human-readable label for a conflict-context code
 };

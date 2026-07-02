@@ -32,6 +32,14 @@ generic engine, the build pipeline, and how a game module plugs in.
   matches the bundled `data/icons/*.png` to commands **by normalised name** (a command's display name
   usually contains the unit/building/tech noun the icon is named for). Inlined into the build; the
   module's `iconOf` turns a rec's id into `icons/<basename>.png`.
+- **`data/positions.json`** — `{command id → grid slot}` (slot `0–14` in a 5-wide card; `row = slot//5`,
+  `col = slot%5`) for the **command-card grid panel** (see below). Covers the train-unit/research-tech
+  buttons plus common command actions (gather point, town bell, back-to-work, ungarrison, More Items) —
+  135 commands. **Not** built by `--regen`; generated from the game's `.dat` (via genieutils, in the
+  upstream tool). Inlined into the build (optional — absent → panel disabled); the module's `slotOf`
+  exposes it as `GAME.slot(rec)`. **`data/COMMAND_CARD_SLOTS.md`** is its human-readable companion (id↔slot
+  per card, plus the tail list of still-unmapped commands: gate/fish-trap actions, generic
+  line-upgrade/unique-unit slots, age-up, villager).
 - **`data/icons/*.png`** — the bundled AoE2 UI icons (units / buildings / techs / heroes), named
   wiki-style (`Barracks_aoe2DE.png`, `Camelrider_aoe2DE.png`, `BallisticsDE.png`). The build **copies
   this folder next to the page** as `site/aoe2/icons/` (too many/large to inline). Not every command
@@ -230,6 +238,28 @@ campaign commands) simply show none. The matching is name-based and best-effort 
 The icon set was pruned to the ones actually shown (133 icons, 176 commands mapped): civ emblems,
 gaia, campaign heroes, civ unique units, and redundant unit/tech upgrade tiers were removed, keeping
 one icon per upgrade line.
+
+## Command-card grid panel
+Selecting (or hovering) a **building** command card also renders that building's in-game **5×3 command
+card** in a panel in the right gutter, beside the keyboard: each mapped command's icon lands in its real
+in-game slot with its bound hotkey overlaid — a visual of the card as the game lays it out. This is the
+engine's generic optional `GAME.slot(rec) → 0..14 | null` hook (page-side `paintCardGrid`, painted from
+`paintCardIcons` so it always tracks the same selected/hovered card as the keyboard overlay). AoE2
+implements it via `slotOf` over `positions.json`. Only building cards have slotted commands, so the panel
+stays hidden for globals / unit / build-menu groups. Notes:
+- **Coverage** (135 commands): the train-unit/research-tech buttons plus the common **command actions**
+  (gather point set/remove, town bell, back-to-work / all-back-to-work, ungarrison, "More Items"). Gather
+  point (`D:prod`) and ungarrison (`T:gt`) live in their own groups (Production Buildings, Garrisons/
+  Transports), so those groups now render a sparse card at the action's slot. **Still unmapped** (`slotOf`
+  → null; stay in the list, absent from the grid): gate + fish-trap actions, generic line-upgrade techs
+  (hotkey name is a generic `Tech: X-line` label), placeholder unique-unit/warship slots, age-up, villager
+  — see the tail of `COMMAND_CARD_SLOTS.md` for the exact list. To extend, add ids to `positions.json`.
+- **Several commands can share a slot** — civ-replacement units (Battering Ram & Armored Elephant both
+  slot 0) and context-shared action buttons (e.g. Dock slot 14 = Thirisadai / More Items / Go Back to
+  Work, only one shown in-game at a time). As the tool shows all civs at once, the cell shows the first
+  variant's icon + first bound variant's key and lists them all in its tooltip (matches `MUTEX_GROUPS`).
+- **`positions.json` ↔ `COMMAND_CARD_SLOTS.md`** stay in sync: the `.md` is the readable source, keyed by
+  the same command id; every `.md` table row (`| slot | r,c | id | name |`) is one `positions.json` entry.
 
 ## AoE2-specific UI notes
 - **Mouse inputs** use VK codes **251–255** (ext buttons / middle / wheel up-down); the on-screen
