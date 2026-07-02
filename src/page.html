@@ -699,7 +699,7 @@ function clearHighlight(){   // purely visual; does not touch the selectedGroup 
 }
 // Ability-card icons on the keyboard: when a single command card (group) is selected, overlay each
 // of its commands' icons on the key it's bound to.  Opt-in per game via GAME.icon(rec) -> url|null;
-// games without it (AoE2) get nothing.  Drawn on card select / re-applied after edits, cleared with
+// games without it get nothing.  Drawn on card select / re-applied after edits, cleared with
 // the rest of the highlight.  First icon on a shared key wins (the intra-card conflict ring flags it).
 function clearGroupIcons(){
   document.querySelectorAll('.kbkey.kbicon').forEach(el=>{
@@ -753,7 +753,7 @@ function hoverRec(r){      // request 6: lighter preview shade + this command's 
   if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-modh'));
-  hoverGroup(r.group);   // preview the icons of the whole group this action belongs to
+  hoverGroup(GAME.groupOf(r));   // preview the icons of the whole group this action belongs to (canonical group name, as buildModel groups by)
 }
 // reverse of hoverRec: hovering a key highlights every list row bound to it (no filtering)
 function hoverKey(id){

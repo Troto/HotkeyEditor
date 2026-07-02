@@ -275,6 +275,8 @@ let CIV = null;              // {idToCivs:{id:[civs]}, units:Set of unit ids}
 let cardData = null;         // our own {byId:{id:[group,ctx]}, chronicles, hidden} mapping
 let chronIds = new Set();    // command ids known to be Chronicles content
 let hiddenIds = new Set();   // command ids always hidden (e.g. the redundant generic "Build")
+let ICONS = {};              // command id -> ability-card icon basename (data/aoe2_icons.json)
+let DEFAULTS = null;         // bundled default profile {profile,base} as base64 .hkp bytes
 function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
 
 // ---- command naming ----
@@ -283,6 +285,14 @@ function recName(r){
   let n=baseName(r.id);
   if(r.occ>1) n+=' ('+r.occ+')';          // alternate binding of the same command
   return n;
+}
+// Ability-card icon for the on-keyboard overlay (engine's optional GAME.icon hook): the unit /
+// building / tech icon matched to this command id (data/aoe2_icons.json), as a page-relative URL
+// (site/aoe2/index.html -> site/aoe2/icons/<name>.png).  null for the many utility/campaign
+// commands with no matching icon -- the overlay just skips those.
+function iconOf(r){
+  const b = r && ICONS[r.id];
+  return b ? 'icons/' + b + '.png' : null;
 }
 
 // ---- file menus + editable records ----
@@ -336,14 +346,33 @@ function groupNameOf(r){
 }
 
 // ---- civ-aware conflict rules ----
-// Command slots that are mutually exclusive by civ — a civ fields at most one, so they
-// can never both be active even in the same card. Used only where the civ dataset can't
-// express it (a generic "Unique X" slot has no real unit name to look up). By command id
-// (stable per game version).  [[explicit-mutex-vs-civ-data]]
+// Command slots that can never both be active — by civ (a civ fields at most one) or by
+// game rules (exclusive unit states / cards). Used only where the datasets can't express
+// it: a generic "Unique X" slot has no real unit name to look up, and unit-state rules
+// (relic-carrying) aren't in any data file. By command id (stable per game version).
+// [[explicit-mutex-vs-civ-data]]
 const MUTEX_GROUPS=[
-  [19053,19358],          // generic Unique Warships  <->  Thirisadai (Bengalis')
-  [19136,19330,19354],    // Go to  Donjon / Krepost / Mule Cart   — civ-exclusive buildings
-  [19137,19019,19159],    // Select all  Donjons / Kreposts / Mule Carts  — same
+  // (Unique Warships / Elite Unique Ship pairs — vs Thirisadai, Demolition Ship, Heavy
+  // Demolition Ship — used to be listed here; the generator's hand-curated _SLOT_CIVS now
+  // gives those generic slots their civ list, so the same-card civ check covers them all.)
+  [19475,19150],          // Tech: Capped/Siege Ram <-> Tech: Siege Elephant — tech-tree-verified:
+                          // Battering Ram civs (49) + Siege/Armored Elephant civs (4) partition
+                          // all 53 with no overlap; each Siege Workshop shows only one slot.
+  [19453,19166],          // Tech: Eagle Warrior/Fire Lancer/Hoplite <-> Tech: Elite Ibirapema/
+                          // Temple Guard — elite techs of regional Barracks units for disjoint
+                          // civ sets (Eagle: Aztecs/Maya; Ibirapema/Temple Guard: the South
+                          // American civs; Fire Lancer: 3K; Hoplite: Chronicles). Techs can't
+                          // arrive via allies/conversion, so the slots never co-appear.
+  [19743,19358],          // Go Back to Work (Dock) <-> Thirisadai — game-tested on a Dravidian
+                          // dock with fishing ships garrisoned: both sit on the one card and
+                          // sharing a key causes no interference.
+  [19144,19162],          // Change Mode <-> Change Mode (2) — no unit's card has both transforms
+  [19222,19233],          // Convert <-> Drop Relic — sharing a key is safe by design (game-
+                          // tested): a relic-carrying monk drops the relic (it can't convert
+                          // anyway), any other monk converts. No effective overlap.
+  // (Go to / Select all  Donjon / Krepost / Mule Cart used to be listed here, but the
+  // civ dataset now derives Select-all/Go-to civ lists from the building itself, and
+  // the G<->G branch civ-checks — so all civ-exclusive global pairs are covered by data.)
   [19143,19060],          // Xolotl Warrior  <->  Scout Cavalry / Hussar  — civ-exclusive: the
                           // Xolotl is trained only by American civs (no Scout line) from
                           // captured/scenario Stables; Scout-line civs never field the Xolotl,
@@ -362,9 +391,20 @@ const UNIVERSAL_SLOTS=new Set([
   19322,   // Unique Unit (Castle)
   19187,   // Unique Unit (Donjon)
 ]);
-const mutexOf=new Map();
-MUTEX_GROUPS.forEach((g,i)=>g.forEach(id=>mutexOf.set(id,i)));
-function sameMutex(a,b){ return mutexOf.has(a) && mutexOf.get(a)===mutexOf.get(b); }
+// Command cards that train/eject units -> carry the gather-point commands (context D:prod).
+// Drop-off and tech-only cards (Mill, Lumber/Mining Camp, Mule Cart, University, Blacksmith,
+// Outpost, gates) have no gather point, so D:prod never clashes with commands on those.
+const PROD_CARDS=new Set(['Town Center','Barracks','Archery Range','Stable','Siege Workshop',
+  'Dock','Castle','Monastery','Market','Donjon','Settlement','Fort','Port','Shipyard']);
+const mutexOf=new Map();   // id -> [group indices]; an id may sit in several groups
+MUTEX_GROUPS.forEach((g,i)=>g.forEach(id=>{
+  if(!mutexOf.has(id)) mutexOf.set(id,[]);
+  mutexOf.get(id).push(i);
+}));
+function sameMutex(a,b){
+  const ga=mutexOf.get(a), gb=mutexOf.get(b);
+  return !!(ga && gb && ga.some(i=>gb.indexOf(i)>=0));
+}
 // Pairs that are technically co-bindable but practically a non-issue: shown as an
 // informational note (override tier — blue ⓘ, no key ring, not counted as a clash) with
 // a custom message, instead of a civ "possible" flag.  [[explicit-mutex-vs-civ-data]]
@@ -373,6 +413,11 @@ const NOTE_PAIRS=[
     msg:'Only clashes if you somehow field both at once — e.g. teamed with Italians '
        +'(Condottiero) or via a conversion. No civ has both normally, so it usually '
        +'doesn’t matter.' },
+  { a:19125, b:19141,     // Infantry Unique Units  vs  Flemish Militia (Burgundians') — same
+                          // Condottiero caveat: Burgundians only see the generic slot with an
+                          // Italian ally; no civ trains both from its own tech tree.
+    msg:'Only clashes if you somehow field both at once — e.g. Burgundians teamed with '
+       +'Italians (Condottiero). No civ has both normally, so it usually doesn’t matter.' },
 ];
 const noteOf=new Map();
 NOTE_PAIRS.forEach(p=>noteOf.set(Math.min(p.a,p.b)+'|'+Math.max(p.a,p.b), p.msg));
@@ -387,7 +432,7 @@ const ISOLATED_IDS=new Set([
 // so the runtime needs no name matching.
 function civsForId(id){ return CIV ? (CIV.idToCivs[id]||null) : null; }
 function isUnitId(id){ return CIV ? CIV.units.has(id) : false; }
-// conflict context comes from card_data.byId[id][1] (G/R/U:type/B:tab/D:card/CAMP)
+// conflict context comes from card_data.byId[id][1] (G/R/U:type/B:tab/D:card|prod/CAMP)
 function recContext(r){
   const e=cardData && cardData.byId && cardData.byId[r.id];
   return e ? e[1] : ('Z|'+r.src);     // unknown -> isolated (no conflicts)
@@ -398,9 +443,11 @@ function recContext(r){
 function uTypesOverlap(ta, tb){
   if(ta===tb) return true;
   if(ta==='any'||tb==='any') return true;        // 'any' = every unit type
-  if(ta==='nonsiege') return tb!=='siege';       // every type except siege (e.g. Garrison)
-  if(tb==='nonsiege') return ta!=='siege';
+  if(ta==='nonsiege') return tb!=='siege'&&tb!=='ram';   // every type except siege (e.g. Garrison);
+  if(tb==='nonsiege') return ta!=='siege'&&ta!=='ram';   // 'ram' (rams/siege towers) is siege too
   return false;                                  // two distinct unit types never coexist
+                                                 // (incl. 'ram' vs 'siege': only rams/siege towers
+                                                 // unload, only artillery attacks ground/packs)
 }
 function ctxClassify(ra, rb){
   if(ISOLATED_IDS.has(ra.id) || ISOLATED_IDS.has(rb.id)) return null;   // isolated sub-mode, never clashes
@@ -408,7 +455,13 @@ function ctxClassify(ra, rb){
   const note=noteFor(ra.id, rb.id);
   if(note) return {sev:'override', note:note};   // edge-case caution, not a real conflict
   const ca=recContext(ra), cb=recContext(rb);
-  if(ca==='G'&&cb==='G') return {sev:'confirmed'};
+  if(ca==='G'&&cb==='G'){                                     // both always active -> clash,
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // unless civ-exclusive (e.g. Go to
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);    // Mule Cart vs Go to Lumber Camp --
+      if(!ov.length) return null;                             // Mule Cart civs have no Lumber Camp)
+      return {sev:'confirmed', civs:ov}; }
+    return {sev:'confirmed'};                                 // can't civ-verify -> always clash
+  }
   if(ca==='R'&&cb==='R') return {sev:'confirmed'};
   if(ca==='R'||cb==='R') return null;
   if(ca==='G'||cb==='G') return {sev:'override'};      // global shadowed by a card/selection
@@ -426,7 +479,11 @@ function ctxClassify(ra, rb){
   }
   if(la==='T') return ca===cb ? {sev:'confirmed'} : null;     // garrisons/transports
   if(la==='D'){
-    if(ta==='any'||tb==='any') return {sev:'confirmed'};      // a building-wide command
+    if(ta==='prod'||tb==='prod'){                             // gather-point commands: active on
+      if(ta===tb) return {sev:'confirmed'};                   // every production card at once,
+      return PROD_CARDS.has(ta==='prod'?tb:ta)                // but drop-off/tech-only cards
+        ? {sev:'confirmed'} : null;                           // (Mill/University/…) have none
+    }
     if(ta!==tb) return null;                                  // different building cards
     if(UNIVERSAL_SLOTS.has(ra.id)&&UNIVERSAL_SLOTS.has(rb.id))
       return {sev:'confirmed'};                               // every civ has these -> always clash
@@ -445,9 +502,10 @@ function ctxLabel(ctx){
   if(ctx==='R') return 'Replay controls';
   if(ctx.indexOf(':')<0) return ctx[0]==='Z' ? 'Ungrouped command' : ctx;
   const layer=ctx[0], rest=ctx.slice(2);
-  if(layer==='U') return 'Selected '+rest+' unit';
+  if(layer==='U') return 'Selected '+(rest==='ram'?'ram / siege tower':rest)+' unit';
   if(layer==='B') return 'Villager build menu — '+(rest==='eco'?'Economy':rest==='mil'?'Military':rest);
-  if(layer==='D') return rest+' — command card';
+  if(layer==='D') return rest==='prod' ? 'Production buildings — any card that trains units'
+                                       : rest+' — command card';
   if(layer==='T') return 'Garrison / transport — '+rest;
   return rest||ctx;
 }
@@ -462,6 +520,17 @@ async function loadFile(file, prev){
   const stem = file.name.split(/[\\/]/).pop().replace(/\.[^.]*$/,'');
   if(info.kind==='shared'){ doc.profile=info; if(stem.toLowerCase()!=='base') doc.name=stem; }
   else { doc.base=info; }
+  return doc;
+}
+// Start from the bundled default profile (HotkeyFiles/DefaultHotkeys.hkp + its Base.hkp,
+// base64'd into GAME_DATA by the generator) instead of picked files -- fills both halves.
+async function loadDefault(prev){
+  if(!(DEFAULTS && DEFAULTS.profile && DEFAULTS.base)) throw new Error('no bundled defaults');
+  const doc = prev || { profile:null, base:null, name:null };
+  const parse = async b64 =>
+    hkp.parse(await hkp.inflateRaw(Uint8Array.from(atob(b64), c=>c.charCodeAt(0))));
+  doc.profile = await parse(DEFAULTS.profile);
+  doc.base = await parse(DEFAULTS.base);
   return doc;
 }
 async function saveDoc(doc, name){
@@ -505,10 +574,12 @@ GAMES.aoe2 = {
       + '<p>The download will provide both files in that structure; extract them and then copy '
       + 'them back to your profile folder (after backing up the profile and deleting it in game '
       + 'if you play on through Steam).</p>',
+    defaultsLabel: 'Load defaults',
     placeholder:
       'Load both files of a profile:<br>'
       + '<code>&lt;Name&gt;.hkp</code> and that profile\'s <code>Base.hkp</code> '
-      + '(from <code>…/profile/&lt;Name&gt;/Base.hkp</code>).',
+      + '(from <code>…/profile/&lt;Name&gt;/Base.hkp</code>),<br>'
+      + 'or click <b>Load defaults</b> to start from the game\'s default hotkeys.',
     applyNote:
       'Apply hotkeys by placing the files in your AoE2 profile folder. On Steam, delete the '
       + 'hotkey layout in-game first so Steam removes its cloud copy.',
@@ -516,7 +587,7 @@ GAMES.aoe2 = {
   // file format: bytes <-> parsed doc, and download packaging
   // file format: the engine calls load()/save() (opaque doc in, packaged download out);
   // the lower-level parse/inflate/zip helpers are AoE2-internal (used by load/save above).
-  codec: { load:loadFile, save:saveDoc,
+  codec: { load:loadFile, loadDefault:loadDefault, save:saveDoc,
            parse:hkp.parse, unparse:hkp.unparse, inflate:hkp.inflateRaw,
            deflate:hkp.deflateRaw, buildZip:hkp.buildZip, buildZipBytes:hkp.buildZipBytes },
   // game-specific input: extra VK labels + the on-screen mouse buttons
@@ -538,6 +609,8 @@ GAMES.aoe2 = {
     cardData = d.card || null;
     chronIds = new Set((d.card&&d.card.chronicles)||[]);
     hiddenIds = new Set((d.card&&d.card.hidden)||[]);
+    ICONS = d.icons || {};
+    DEFAULTS = d.defaults || null;
   },
   fileStatus: fileStatus,        // load-status chips for the toolbar (doc, name) -> html
   bindings: buildEntries,        // doc -> the engine's editable rec list
@@ -546,6 +619,7 @@ GAMES.aoe2 = {
   context: recContext,           // conflict-scope code for a rec
   classify: ctxClassify,         // do two same-combo recs clash? -> tier | null
   recName: recName,              // display name for a rec
+  icon: iconOf,                  // ability-card icon overlaid on the keyboard when a card is selected/hovered
   baseName: baseName,            // display name for a command id
   ctxLabel: ctxLabel,              // human-readable label for a conflict-context code
 };

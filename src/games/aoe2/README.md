@@ -27,6 +27,20 @@ generic engine, the build pipeline, and how a game module plugs in.
     actually use (vs the game's ~21k-entry string table).
   - `card_data.json` — `{byId:{id:[group,ctx]}, chronicles, hidden}` (our curation over `hotkeys.json`).
   - `civ_data.json` — `{civCount, idToCivs:{id:[civs]}, units:[ids]}` (per-civ availability, keyed by id).
+- **`data/aoe2_icons.json`** — `{command id → icon basename}` for the on-keyboard **ability-card icon
+  overlay** (see below). **Not** built by `--regen`; produced by **`data/gen_aoe2_icons.py`**, which
+  matches the bundled `data/icons/*.png` to commands **by normalised name** (a command's display name
+  usually contains the unit/building/tech noun the icon is named for). Inlined into the build; the
+  module's `iconOf` turns a rec's id into `icons/<basename>.png`.
+- **`data/icons/*.png`** — the bundled AoE2 UI icons (units / buildings / techs / heroes), named
+  wiki-style (`Barracks_aoe2DE.png`, `Camelrider_aoe2DE.png`, `BallisticsDE.png`). The build **copies
+  this folder next to the page** as `site/aoe2/icons/` (too many/large to inline). Not every command
+  has one (utility, control-group, and campaign/scenario commands mostly don't) — unmatched commands
+  just show no icon. Game UI assets bundled for display; see **Provenance / licensing**.
+- **`HotkeyFiles/`** — the bundled default profile, in the game's own on-disk structure:
+  `DefaultHotkeys.hkp` (shared menus) + `DefaultHotkeys/Base.hkp` (remappable system).
+  `--build` base64-encodes both into the page (`.hkp` is binary) for the one-click
+  **Load defaults** button (module `loadDefault`); if missing, the button is hidden.
 - **`../../Example Key files/`** (repo root) — sample profiles for testing.
 
 ## Commands
@@ -34,6 +48,11 @@ generic engine, the build pipeline, and how a game module plugs in.
   (also refreshes the `site/index.html` launcher).
 - **Regen data**: `python3 games/aoe2/game_module_generator.py --regen` — needs an AoE2:DE
   install (`AOE2_STRINGS` / `AOE2_HOTKEYS`); **not runnable without one** (e.g. in a container).
+- **Rebuild the icon map**: `python3 games/aoe2/data/gen_aoe2_icons.py` — re-matches
+  `data/icons/*.png` to command ids → `data/aoe2_icons.json` (stdlib; no game install). Rerun after
+  adding/removing icons; pin or fix matches via its `OVERRIDES` (by id) / `NAME_OVERRIDES`
+  (by command name — used for genuine misses like Villager/Tower/Age Up and one representative
+  icon per Blacksmith/eco upgrade line).
 - **`.hkp` round-trip check**: `python3 games/aoe2/hkp_parser.py "<file>.hkp"`.
 - **Dvorak CLI**: `python3 games/aoe2/dvorak_convert.py`.
 - **Preview**: build, then `python3 -m http.server 8765` and open
@@ -75,7 +94,13 @@ are read at runtime** — they're build-time inputs.
    `Use Type` gives unit / building / tech. Standard civs = `civilizations.json` entries with
    `era == "base"` minus Gaia (the 6 `antiquity` entries are the Chronicles civs, excluded). Each
    node is matched to its hotkey command id by **normalised name** (`build_civ_data` / `_norm_name`),
-   so the runtime civ check is pure id lookup → `civ_data.json`.
+   so the runtime civ check is pure id lookup → `civ_data.json`. The global **`Select all X` /
+   `Go to X`** commands never match a tech-tree name themselves, so they **inherit building X's
+   civ list** (`_derived_civs`, singular/plural aware) — that's what lets the runtime suppress
+   civ-exclusive global pairs (e.g. Go to Mule Cart vs Go to Lumber Camp). Generic slot names
+   the trees can't resolve at all get a **hand-curated list** (`_SLOT_CIVS`: the dock
+   Unique Warships / Elite Unique Ship slots → Koreans/Portuguese/Vikings; keep it updated
+   when a DLC adds a dock unique warship).
 
 ## Groups vs. Contexts — the core model
 `build_card_data()` emits **`byId = {commandId: [displayGroup, contextCode]}`** plus a
@@ -90,11 +115,15 @@ are read at runtime** — they're build-time inputs.
 - `R` — replay/spectator mode.
 - `CAMP` — campaign/Chronicles content (hidden by default).
 - `U:<type>` — a unit is selected. types: `any`, `nonsiege`, `villager`, `military`,
-  `siege`, `monk`, `trade`, `fishing`, `hybrid`. `any` overlaps every type; `nonsiege`
-  overlaps all but `siege` (e.g. Garrison); two distinct singleton types never coexist.
+  `siege`, `ram`, `monk`, `trade`, `fishing`, `hybrid`. `any` overlaps every type; `nonsiege`
+  overlaps all but `siege`/`ram` (e.g. Garrison); two distinct singleton types never coexist —
+  `ram` (rams/siege towers: Unload) is split from `siege` (artillery: Attack Ground/Pack/Unpack)
+  because no unit has both command sets.
 - `B:<tab>` — villager build menu tab, `eco`/`mil` (mutually exclusive tabs).
-- `D:<card>` — a building is selected: a specific card (`D:Stable`) or `D:any` for a
-  command on every building (gather points).
+- `D:<card>` — a building is selected: a specific card (`D:Stable`) or `D:prod` for the
+  gather-point commands, active on every card that **trains units** (`PROD_CARDS` in the
+  module) — drop-off/tech-only cards (Mill, University, Blacksmith, camps, Mule Cart,
+  Outpost) have no gather point.
 - `T:gt` — garrisons/transports layer (Unload/Ungarrison): isolated, clashes only within itself.
 - `X:...` — fully isolated (e.g. `X:autoscout`): never clashes (used for special toggles).
 
@@ -105,16 +134,21 @@ The authoritative groups are good but coarse, so we reorganise (all editable in 
 - `VILLAGER_HOTKEYS` split by the json `context` field → **Build Economic Buildings** /
   **Build Military Buildings** (contexts `B:eco`/`B:mil`); `VILLAGER_BUILD_FISH_TRAP` →
   **Fishing Ship Build** (`U:fishing`). (`NEXT_PAGE` / "More Items" is *not* the build toggle —
-  it's the Dock's second command page; see `_ABILITY` → Dock.)
+  it was the Dock's second command page, but DE docks fit one card, so the command is vestigial
+  and sits in the always-`hidden` set via **`_VESTIGIAL_HIDDEN`**.)
 - The big base `UNIT_COMMAND` group is split by per-command `data_name` via the **`_ABILITY`**
   map into: **Unit Commands** (Stop/Garrison/Delete only; Garrison is `U:nonsiege`),
-  **Villager Commands**, **Siege Commands** (pack/unpack/unload-siege/attack-ground),
-  **Hybrid Units** (Change Mode), **Monk Commands**, **Production Buildings** (gather points),
+  **Villager Commands**, **Siege Commands** (pack/unpack/attack-ground `U:siege`;
+  unload-siege `U:ram` — rams/siege towers only),
+  **Hybrid Units** (Change Mode), **Monk Commands**, **Production Buildings** (gather points, `D:prod`),
   **Garrisons/Transports** (Unload/Ungarrison, `T:gt`), **Trade Commands**; Go-Back-to-Work → Dock.
 - `MILITARY_UNITS` stances → **Military Unit Commands**; its `BUILD_MENU` (the generic
   "Build") → Villager Commands **but added to the always-`hidden` set** (the eco/mil build
   menus make it redundant); `AUTO_SCOUT` → isolated `X:autoscout` (coexists with Stop).
-- Building cards → group = card name, context `D:<name>`.
+- Building cards → group = card name, context `D:<name>`. A few commands are misfiled in
+  `hotkeys.json` and corrected by id via **`_CARD_FIX`** (e.g. Rebuild Fish Trap / Toggle
+  Automatic Fish Trap Rebuilding sit in the Dock group but belong to the selected Fish
+  Trap's own card).
 - `CAMPAIGN_*` groups → `chronicles` (hidden).
 - The `hidden` list in `card_data` = ids dropped from the view unconditionally (unlike
   `chronicles`, which a toggle reveals). Saved files keep them byte-for-byte.
@@ -134,21 +168,33 @@ three vendored files with **`--regen`** (needs a game install).
 ## Conflict detection (frontend `ctxClassify` + `computeConflicts`)
 The generic engine pairs up every two commands that share the exact combo (code+ctrl+alt+shift)
 and asks this module whether they can co-occur. AoE2's rules:
-- **Mutex slots** (`MUTEX_GROUPS`, by command id) → never clash. For civ-exclusive sets the
-  civ dataset can't resolve from names: the generic **Unique Warships** slot vs **Thirisadai**;
-  the global **Go to / Select all** commands for the civ-unique buildings (Donjon / Krepost /
-  Mule Cart), which are otherwise `G`+`G` = confirmed; and **Xolotl Warrior** vs the **Scout
-  Cavalry / Hussar** line (the Xolotl is trained only by the American civs — which have no Scout
-  line — from captured/scenario Stables, so the two never share a Stable card). Checked first in
-  `ctxClassify`.
+- **Mutex slots** (`MUTEX_GROUPS`, by command id; an id may sit in several groups) → never
+  clash. For exclusions the id-keyed civ data can't resolve (generic slot names), each verified
+  against the tech trees or in game: **Capped/Siege Ram techs** vs **Siege Elephant tech** (ram
+  civs 49 + elephant civs 4 partition the roster); the **Eagle Warrior/Fire Lancer/Hoplite**
+  elite tech vs the **Elite Ibirapema/Temple Guard** tech (regional Barracks units of disjoint
+  civ sets; techs can't arrive via allies/conversion); **Xolotl Warrior** vs the **Scout
+  Cavalry / Hussar** line (the Xolotl is trained only by the American civs — which have no
+  Scout line — from captured/scenario Stables); **Change Mode** vs **Change Mode (2)** (no
+  unit's card has both transforms); **Convert** vs **Drop Relic** (game-tested: a
+  relic-carrying monk drops the relic — it can't convert anyway; any other monk converts);
+  and **Go Back to Work (Dock)** vs **Thirisadai** (game-tested on a Dravidian dock with
+  garrisoned fishing ships: both on one card, sharing a key doesn't interfere).
+  Checked first in `ctxClassify`. (Pairs that boil down to civ availability live in the civ
+  data instead: the Go to / Select all commands via `_derived_civs`, and the dock **Unique
+  Warships / Elite Unique Ship** slots via the hand-curated **`_SLOT_CIVS`** —
+  Koreans/Portuguese/Vikings — which also civ-scopes their remaining real conflicts.)
 - **Isolated ids** (`ISOLATED_IDS`, by command id) → never clash with anything, because they
   live in their own sub-mode that isn't active alongside ordinary bindings (e.g. **Remove Gather
   Point**, only reachable after Set Gather Point is pressed). Checked first in `ctxClassify`.
 - **Note pairs** (`NOTE_PAIRS`, by command id) → shown as an informational note (override tier:
   blue ⓘ, no key ring, not a conflict) with a custom message instead of a civ flag — for pairs
-  that are co-bindable but practically a non-issue (e.g. **Infantry Unique Units** vs **Eagle
-  Warrior / Fire Lancer**: only matters with an Italian ally's Condottiero or a conversion).
-- `G`+`G` / `R`+`R` → **confirmed**.
+  that are co-bindable but practically a non-issue (**Infantry Unique Units** vs **Eagle
+  Warrior / Fire Lancer**, and vs **Flemish Militia**: only matters with an Italian ally's
+  Condottiero or a conversion — no civ has both from its own tree).
+- `G`+`G` → civ check by command id first: civ-exclusive globals (Go to / Select all of a
+  building the other's civs don't have — e.g. **Go to Mule Cart** vs **Go to Lumber Camp**) →
+  suppressed; overlapping or can't-verify → **confirmed**. `R`+`R` → **confirmed**.
 - `G` + any contextual → **override** (caution: the active card/selection shadows the global).
 - same `U` layer → confirmed iff unit-types overlap (`uTypesOverlap`).
 - `B` layer (villager build menu): different tab (eco vs mil) → no clash; **same tab** → civ
@@ -156,7 +202,8 @@ and asks this module whether they can co-occur. AoE2's rules:
   Donjon, Krepost, Mule Cart, … and Settlement vs the Mill/Lumber/Mining it replaces) → suppressed;
   overlapping or can't-verify → confirmed.
 - same `T` layer → confirmed iff identical sub-key.
-- `D` layer: `D:any` overlaps all cards → confirmed; different cards → no clash; **same card**
+- `D` layer: `D:prod` (gather points) overlaps exactly the unit-producing cards (`PROD_CARDS`) →
+  confirmed there, no clash vs Mill/University/etc.; different cards → no clash; **same card**
   → **universal slots** first (`UNIVERSAL_SLOTS`, by id — the generic Unique-Unit / Elite-UU /
   Unique-Castle / Unique-Imperial slots every civ has at its Castle; civ-generic names so the
   dataset can't resolve them, but all civs always have all of them) → **confirmed**; otherwise a
@@ -171,6 +218,18 @@ cards never false-flag) — unlike the in-game checker which flags any duplicate
 
 To extend conflict handling **without** an install, edit `MUTEX_GROUPS` / `NOTE_PAIRS` /
 `ISOLATED_IDS` in the embedded JS (pure frontend, by command id).
+
+## Ability-card icons on the keyboard
+Selecting a command card (a group heading) — or **hovering** a command row / a heading's collapse or
+👁 button — overlays each of that group's commands' unit/building/tech icons on the keys they're bound
+to. This is the engine's generic optional `GAME.icon(rec)` hook (same feature WC3 uses); AoE2
+implements it via `iconOf`, looking up `aoe2_icons.json` (command id → icon) and returning a
+page-relative `icons/<basename>.png`. Commands with no matching icon (most utility / control-group /
+campaign commands) simply show none. The matching is name-based and best-effort — see
+`data/gen_aoe2_icons.py` (rerun it, or edit its `OVERRIDES` / `NAME_OVERRIDES`, to change matches).
+The icon set was pruned to the ones actually shown (133 icons, 176 commands mapped): civ emblems,
+gaia, campaign heroes, civ unique units, and redundant unit/tech upgrade tiers were removed, keeping
+one icon per upgrade line.
 
 ## AoE2-specific UI notes
 - **Mouse inputs** use VK codes **251–255** (ext buttons / middle / wheel up-down); the on-screen
@@ -195,3 +254,7 @@ To extend conflict handling **without** an install, edit `MUTEX_GROUPS` / `NOTE_
 The `hkp_parser` logic derives from [`crimsoncantab/aok-hotkeys`](https://github.com/crimsoncantab/aok-hotkeys),
 whose LICENSE is **public domain** → no obligation; a courtesy credit comment is kept in
 `hkp_parser.py`. No `LICENSE`/`NOTICE` file is required.
+
+The `data/icons/*.png` are Age of Empires II UI icons (Microsoft / Forgotten Empires game assets,
+wiki-sourced), bundled for display in this fan tool. `gen_aoe2_icons.py` only reads their filenames
+to build the name→id match; the images themselves are the game's, used here for identification.

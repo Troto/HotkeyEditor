@@ -16,10 +16,12 @@ embedded in page.html.
 
 Stdlib only (works on Python 3.7).
 """
+import base64
 import glob
 import json
 import os
 import re
+import shutil
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))            # games/aoe2/
@@ -116,10 +118,13 @@ def load_strings():
 # --- our own curation layered on the authoritative hotkeys.json ---------
 # Each command gets [display group, conflict context].  Context codes:
 #   G = always-active global ; R = replay ; CAMP = campaign (hidden)
-#   U:<type> = unit selected (any/villager/military/siege/monk/trade) — different
-#              unit types are mutually exclusive; 'any' overlaps all types
+#   U:<type> = unit selected (any/villager/military/siege/ram/monk/trade/…) — different
+#              unit types are mutually exclusive; 'any' overlaps all types; 'ram'
+#              (rams/siege towers) is separate from 'siege' (artillery) but both
+#              count as siege for 'nonsiege'
 #   B:<tab>  = villager build menu tab (eco/mil) — tabs are mutually exclusive
-#   D:<card> = building selected (a specific card, or 'any' for all buildings)
+#   D:<card> = building selected (a specific card, or 'prod' for the gather-point
+#              commands, active on every card that trains units — see PROD_CARDS)
 # The big base UNIT_COMMAND_HOTKEYS group is split by data_name:
 _ABILITY = {
     'BUILD_ECONOMIC': ('Villager Commands', 'U:villager'),
@@ -136,7 +141,7 @@ _ABILITY = {
     'NEXT_PAGE': ('Dock', 'D:Dock'),                 # "More Items" — the Dock's second command page
     'DELETE_UNIT': ('Unit Commands', 'U:any'),
     'DELETE_UNITS': ('Unit Commands', 'U:any'),
-    'UNLOAD_RAM': ('Siege Commands', 'U:siege'),
+    'UNLOAD_RAM': ('Siege Commands', 'U:ram'),      # only rams/siege towers unload; artillery doesn't
     'PACK': ('Siege Commands', 'U:siege'),
     'UNPACK': ('Siege Commands', 'U:siege'),
     'ATTACK_GROUND': ('Siege Commands', 'U:siege'),
@@ -145,14 +150,28 @@ _ABILITY = {
     'HEAL': ('Monk Commands', 'U:monk'),
     'CONVERT': ('Monk Commands', 'U:monk'),
     'DROP_RELIC': ('Monk Commands', 'U:monk'),
-    'BUILDING_SET_GATHER_POINT': ('Production Buildings', 'D:any'),
-    'REMOVE_GATHER_POINT': ('Production Buildings', 'D:any'),
-    'SET_GATHER_POINT_ON_SELF': ('Production Buildings', 'D:any'),
+    'BUILDING_SET_GATHER_POINT': ('Production Buildings', 'D:prod'),   # only unit-producing cards
+    'REMOVE_GATHER_POINT': ('Production Buildings', 'D:prod'),         # have a gather point (not
+    'SET_GATHER_POINT_ON_SELF': ('Production Buildings', 'D:prod'),    # Mill/University/camps/…)
     'FORTIFIED_CHURCH_GO_BACK_TO_WORK': ('Dock', 'D:Dock'),   # go back to work (church/dock)
     'SHIP_TRADE_WOOD_1': ('Trade Commands', 'U:trade'),
     'SHIP_TRADE_WOOD_2': ('Trade Commands', 'U:trade'),
     'SHIP_TRADE_WOOD_3': ('Trade Commands', 'U:trade'),
 }
+# hotkeys.json files a few commands under the wrong building's group; correct them by
+# string id.  The two fish-trap commands live on the selected Fish Trap's own card, not
+# the Dock's -- they can never clash with Dock units/techs.
+_CARD_FIX = {
+    19123: ('Fish Trap', 'D:Fish Trap'),   # Rebuild Fish Trap
+    19101: ('Fish Trap', 'D:Fish Trap'),   # Toggle Automatic Fish Trap Rebuilding
+}
+
+# Commands still present in hotkeys.json but with no button in the current game --
+# always hidden (dropped from the list and from conflict checks; kept in saved files).
+_VESTIGIAL_HIDDEN = {
+    19217,   # More Items -- the old second Dock page; DE docks fit one card (game-tested)
+}
+
 # always-active shared groups (profile menus) -> (group, ctx); CYCLE merges into Go-To
 _SHARED = {
     'UNIT_COMMAND_HOTKEYS': ('Unit Commands', 'U:any'),
@@ -239,6 +258,9 @@ def build_card_data():
                     cid = c.get('name_string_id')
                     if cid is None:
                         continue
+                    if cid in _CARD_FIX:      # misfiled in hotkeys.json -- see _CARD_FIX
+                        put(cid, *_CARD_FIX[cid])
+                        continue
                     if camp:
                         chron.add(cid)
                         put(cid, gname or 'Campaign', 'CAMP')
@@ -260,6 +282,7 @@ def build_card_data():
                             put(cid, 'Build Economic Buildings', 'B:eco')
                     elif gname:
                         put(cid, gname, 'D:' + gname)
+            hidden |= _VESTIGIAL_HIDDEN
             print('card data: %d command ids grouped from hotkeys.json' % len(by_id))
             return json.dumps({'byId': by_id, 'chronicles': sorted(chron),
                                'hidden': sorted(hidden)})
@@ -277,6 +300,40 @@ def _norm_name(s):
     n = re.sub(r'^Tech:\s*', '', n, flags=re.I).strip()
     n = re.sub(r'-line$', '', n, flags=re.I).strip()
     return n.lower()
+
+
+_DERIVED_RE = re.compile(r'^(?:Select all|Go to) (.+)$', re.I)
+
+
+def _derived_civs(name, name2civs):
+    """Civ list for a global 'Select all X' / 'Go to X' command, inherited from
+    building X (the command's own name never appears in the tech trees, so the
+    direct name match misses these).  Tries the singular too ('Mule Carts' ->
+    'mule cart', 'Universities' -> 'university').  None when X isn't a tech-tree
+    name (e.g. 'Select all Idle Villagers') -- those stay civ-unknown."""
+    m = _DERIVED_RE.match(name or '')
+    if not m:
+        return None
+    base = _norm_name(m.group(1))
+    cands = [base]
+    if base.endswith('ies'):
+        cands.append(base[:-3] + 'y')
+    if base.endswith('s'):
+        cands.append(base[:-1])
+    for c in cands:
+        if c in name2civs:
+            return sorted(name2civs[c])
+    return None
+
+
+# Hand-curated civ lists for generic slot names the tech trees can't resolve ("Unique
+# Warships" isn't a node name).  The dock unique-warship slots belong to exactly the
+# Longboat/Turtle Ship/Caravel civs (Thirisadai got its own ids, and has no elite
+# upgrade -- game-tested).  Update when a DLC adds a dock unique warship.
+_SLOT_CIVS = {
+    19053: ['Koreans', 'Portuguese', 'Vikings'],   # Unique Warships (train slot)
+    19457: ['Koreans', 'Portuguese', 'Vikings'],   # Tech: Elite Unique Ship
+}
 
 
 def _hotkey_string_ids(hk):
@@ -324,14 +381,24 @@ def build_civ_data(dat_dir, hotkey_ids):
                 unit_names.add(nm)
     id_to_civs = {}
     unit_ids = []
+    derived = 0
     for cid in sorted(hotkey_ids):
         nm = _norm_name(STRINGS.get(cid, ''))
         if nm in name2civs:
             id_to_civs[str(cid)] = sorted(name2civs[nm])
             if nm in unit_names:
                 unit_ids.append(cid)
-    print('civ data: %d civs, %d ids mapped (%d units)'
-          % (len(civs), len(id_to_civs), len(unit_ids)))
+        else:
+            # global Select-all / Go-to commands inherit the building's civ list, so
+            # the runtime can suppress civ-exclusive global pairs (e.g. Go to Mule
+            # Cart vs Go to Lumber Camp -- Mule Cart civs have no Lumber Camp)
+            dcivs = _derived_civs(STRINGS.get(cid, ''), name2civs) \
+                or _SLOT_CIVS.get(cid)
+            if dcivs:
+                id_to_civs[str(cid)] = sorted(dcivs)
+                derived += 1
+    print('civ data: %d civs, %d ids mapped (%d units, %d derived select/go-to)'
+          % (len(civs), len(id_to_civs), len(unit_ids), derived))
     return json.dumps({'civCount': len(civs), 'idToCivs': id_to_civs,
                        'units': sorted(unit_ids)}, ensure_ascii=False)
 
@@ -394,6 +461,28 @@ def build():
     except FileNotFoundError as e:
         print('ERROR: missing data file (%s); run --regen first.' % e.filename)
         return None
+    try:
+        # command id -> ability-card icon basename (built by data/gen_aoe2_icons.py); optional so a
+        # checkout without it still builds -- the keyboard icon overlay is just disabled then.
+        data['icons'] = json.load(open(os.path.join(_DATA_DIR, 'aoe2_icons.json'), encoding='utf-8'))
+    except FileNotFoundError:
+        print('WARNING: data/aoe2_icons.json missing; keyboard ability-icon overlay disabled '
+              '(run data/gen_aoe2_icons.py)')
+    try:
+        # Bundled default profile (both halves of an AoE2 profile) for the one-click
+        # "Load defaults" button.  .hkp is binary (zip/deflate), so base64 it into the
+        # json payload; module.js loadDefault decodes + parses both at runtime.
+        hk_dir = os.path.join(_HERE, 'HotkeyFiles')
+        with open(os.path.join(hk_dir, 'DefaultHotkeys.hkp'), 'rb') as f:
+            prof_bytes = f.read()
+        with open(os.path.join(hk_dir, 'DefaultHotkeys', 'Base.hkp'), 'rb') as f:
+            base_bytes = f.read()
+        data['defaults'] = {
+            'profile': base64.b64encode(prof_bytes).decode('ascii'),
+            'base': base64.b64encode(base_bytes).decode('ascii'),
+        }
+    except FileNotFoundError as e:
+        print('WARNING: %s missing; "Load defaults" button will be hidden' % e.filename)
     site_dir = os.path.join(_ROOT, 'site')     # deployable (e.g. Cloudflare Pages output dir)
     out_path = os.path.join(site_dir, _GAME_SLUG, 'index.html')
     try:
@@ -402,7 +491,27 @@ def build():
         print('ERROR: %s' % e)
         return None
     print('wrote site/%s/index.html (%d KB)' % (_GAME_SLUG, nbytes // 1024))
+    _copy_icons(os.path.dirname(out_path))
     return (_GAME_SLUG, _GAME_NAME)
+
+
+def _copy_icons(out_dir):
+    """Copy the bundled command icons next to the built page (site/aoe2/icons/).
+
+    Too many/large to inline, so the module references them relatively (icons/<name>.png -- see
+    module.js iconOf); this ships the folder alongside index.html.  Mirrors the source tree
+    (overwriting) so a removed icon is pruned.  Absent icons/ dir -> skip (overlay disabled).
+    """
+    src = os.path.join(_DATA_DIR, 'icons')
+    if not os.path.isdir(src):
+        print('WARNING: %s missing; no command icons copied to site/' % os.path.relpath(src, _ROOT))
+        return
+    dst = os.path.join(out_dir, 'icons')
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    n = sum(len(files) for _, _, files in os.walk(dst))
+    print('copied %d command icons to site/%s/icons/' % (n, _GAME_SLUG))
 
 
 if __name__ == '__main__':
