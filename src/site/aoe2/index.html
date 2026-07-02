@@ -75,6 +75,10 @@
   /* groups are assigned to fixed columns by JS to balance total command count */
   #content { display: flex; gap: 26px; align-items: flex-start; padding-top: 6px; }
   .col { flex: 0 1 320px; max-width: 320px; min-width: 0; }   /* fixed width; don't stretch to fill */
+  /* category title atop each column (games with strict per-category columns, e.g. WC3 races) */
+  .coltitle { font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: .08em;
+              color: #cfe0ff; padding: 2px 2px 6px; margin-bottom: 6px;
+              border-bottom: 2px solid #3a4150; }
   .pill { font-size: 11px; padding: 1px 7px; border-radius: 10px; background: #2c313d;
           color: #aeb6c4; margin-left: 6px; }
   .empty { color: #8c93a3; padding: 40px 0; text-align: center; }
@@ -133,6 +137,13 @@
                  box-shadow: 0 0 0 2px rgba(240,161,50,.5); z-index: 1; }
   .kbkey.conflict { box-shadow: 0 0 0 2px var(--sev-confirmed); z-index: 1; }
   .kbkey.clash { box-shadow: 0 0 0 2px var(--sev-possible); z-index: 1; }
+  /* ability-card icon overlay: when a command card (group) is selected, each of its commands'
+     icons is shown on the key it's bound to; the key label shrinks to a corner badge (as in-game). */
+  .kbkey .keyimg { position: absolute; inset: 0; width: 100%; height: 100%;
+                   object-fit: cover; border-radius: 4px; pointer-events: none; }
+  .kbkey.kbicon .lbl { position: absolute; top: 0; left: 1px; z-index: 1; font-size: 9px;
+                       line-height: 1.15; font-weight: 700; color: #fff;
+                       text-shadow: 0 0 2px #000, 0 0 2px #000, 0 0 2px #000; }
   /* interaction guide in the right gutter (grid col 3), mirroring the conflict panel on the left */
   .khelp { grid-column: 3; min-width: 0; margin-left: 18px; font-size: 12px; color: #9aa3b2; }
   .khelp h3 { margin: 0 0 10px; font-size: 12px; text-transform: uppercase; letter-spacing: .05em; color: #8c93a3; }
@@ -442,6 +453,7 @@ let keyEls={};               // 'k'+vk | 'm'+mod -> [keyboard DOM elements]
 let cmdEls=new Map();        // rec -> command-row DOM element (rebuilt each renderList)
 let selectedKey=null;        // 'k'+vk | 'm'+mod currently filtering, or null
 let selectedGroup=null;      // group name whose heading is "selected" (keys highlighted), or null
+let hoverGroupName=null;     // group name being hover-previewed (its card icons shown), or null
 let listFilter=null;         // active GAME.filters id (e.g. a WC3 race), or null = all
 function buildModel(){
   const full=GAME.bindings(state.doc).filter(r=>!r.hidden);   // always drop hidden cmds (kept in state for saving)
@@ -683,13 +695,48 @@ function clearHighlight(){   // purely visual; does not touch the selectedGroup 
   document.querySelectorAll('.kbkey.hl,.kbkey.hl-mod').forEach(el=>el.classList.remove('hl','hl-mod'));
   document.querySelectorAll('.cmd.selcmd').forEach(el=>el.classList.remove('selcmd'));
   document.querySelectorAll('.ghighlight.selgroup').forEach(el=>el.classList.remove('selgroup'));
+  clearGroupIcons();
 }
+// Ability-card icons on the keyboard: when a single command card (group) is selected, overlay each
+// of its commands' icons on the key it's bound to.  Opt-in per game via GAME.icon(rec) -> url|null;
+// games without it (AoE2) get nothing.  Drawn on card select / re-applied after edits, cleared with
+// the rest of the highlight.  First icon on a shared key wins (the intra-card conflict ring flags it).
+function clearGroupIcons(){
+  document.querySelectorAll('.kbkey.kbicon').forEach(el=>{
+    el.classList.remove('kbicon'); const im=el.querySelector('.keyimg'); if(im) im.remove(); });
+}
+function showGroupIcons(group){
+  if(!GAME.icon || !group) return;
+  group.recs.forEach(r=>{
+    if(!r.e.code) return;                       // unbound -> no key to draw on
+    const url=GAME.icon(r); if(!url) return;
+    (keyEls['k'+r.e.code]||[]).forEach(el=>{
+      if(el.querySelector('.keyimg')) return;   // key already has an icon from this card
+      const img=document.createElement('img'); img.className='keyimg'; img.src=url; img.alt=''; img.loading='lazy';
+      el.insertBefore(img, el.firstChild); el.classList.add('kbicon');
+    });
+  });
+}
+// Which card's icons sit on the keyboard: a hover-previewed group (hovering a command row or a
+// group heading) takes precedence over the persistently-selected card, so the two never stack.
+// Recomputed (clear + repaint) whenever hover or selection changes.
+function paintCardIcons(){
+  clearGroupIcons();
+  const name=hoverGroupName||selectedGroup;
+  if(!name) return;
+  const g=groupedView.find(x=>x.name===name);
+  if(g) showGroupIcons(g);
+}
+// Hover-preview a whole group's card icons (used by command-row hover and the group-heading
+// buttons); clearHover() reverts to whatever card is selected.
+function hoverGroup(name){ if(!GAME.icon) return; hoverGroupName=name; paintCardIcons(); }
 // re-apply the selected group's key highlight + heading marker (after edits / re-renders)
 function applyGroupHighlight(){
   if(!selectedGroup) return;
   const g=groupedView.find(x=>x.name===selectedGroup);
   if(!g){ selectedGroup=null; return; }          // group no longer exists (e.g. new file loaded)
   g.recs.forEach(hlRec);
+  paintCardIcons();
   document.querySelectorAll('.ghighlight').forEach(el=>{
     if(el.dataset.group===selectedGroup) el.classList.add('selgroup'); });
 }
@@ -700,12 +747,13 @@ function hlRec(r){
   if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-mod'));
   if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-mod'));
 }
-function hoverRec(r){      // request 6: lighter preview shade
+function hoverRec(r){      // request 6: lighter preview shade + this command's whole card's icons
   const e=r.e;
   if(e.code) (keyEls['k'+e.code]||[]).forEach(el=>el.classList.add('hlh'));
   if(e.ctrl) (keyEls['mctrl']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.alt)  (keyEls['malt']||[]).forEach(el=>el.classList.add('hl-modh'));
   if(e.shift)(keyEls['mshift']||[]).forEach(el=>el.classList.add('hl-modh'));
+  hoverGroup(r.group);   // preview the icons of the whole group this action belongs to
 }
 // reverse of hoverRec: hovering a key highlights every list row bound to it (no filtering)
 function hoverKey(id){
@@ -716,11 +764,12 @@ function hoverKey(id){
 function clearHover(){
   document.querySelectorAll('.kbkey.hlh,.kbkey.hl-modh').forEach(el=>el.classList.remove('hlh','hl-modh'));
   document.querySelectorAll('.cmd.hlcmd').forEach(el=>el.classList.remove('hlcmd'));
+  if(hoverGroupName!==null){ hoverGroupName=null; paintCardIcons(); }   // revert to the selected card's icons
 }
 function onCommandClick(r,item){ selectedGroup=null; clearHighlight(); hlRec(r); item.classList.add('selcmd'); }
 function onGroupClick(group, el){
   if(selectedGroup===group.name){ selectedGroup=null; clearHighlight(); return; }  // click again -> clear
-  selectedGroup=group.name; clearHighlight(); group.recs.forEach(hlRec);
+  selectedGroup=group.name; clearHighlight(); group.recs.forEach(hlRec); paintCardIcons();
   if(el) el.classList.add('selgroup');
 }
 function onKeyClick(id, ev){
@@ -863,6 +912,8 @@ function buildGroupEl(v, forceOpen){
   const gname=document.createElement('span'); gname.className='gname'; gname.textContent=group.name;
   collapseBtn.append(caret,gname);
   collapseBtn.onclick=()=>toggleCollapse(group.name);
+  collapseBtn.onmouseenter=()=>hoverGroup(group.name);   // preview this card's icons on the keyboard
+  collapseBtn.onmouseleave=clearHover;
   // highlight button: fills the rest of the heading, holds the eye icon + key count
   const hlBtn=document.createElement('button');
   hlBtn.className='ghighlight'+(selectedGroup===group.name?' selgroup':'');
@@ -872,6 +923,8 @@ function buildGroupEl(v, forceOpen){
   const pill=document.createElement('span'); pill.className='pill'; pill.textContent=recs.length;
   hlBtn.append(eye,pill);
   hlBtn.onclick=()=>onGroupClick(group, hlBtn);
+  hlBtn.onmouseenter=()=>hoverGroup(group.name);   // preview this card's icons on the keyboard
+  hlBtn.onmouseleave=clearHover;
   h.append(collapseBtn,hlBtn);
   grp.appendChild(h);
   if(open){
@@ -918,12 +971,14 @@ function _renderList(){
   const HEADER_W=2;
   const gw=v=>HEADER_W + v.recs.length;   // a group's weight
   const K=columnCount(content);
-  const addCol=(items,s,e)=>{ const col=document.createElement('div'); col.className='col';
+  const addCol=(items,s,e,title)=>{ const col=document.createElement('div'); col.className='col';
+    if(title){ const t=document.createElement('div'); t.className='coltitle'; t.textContent=title; col.appendChild(t); }
     for(let i=s;i<e;i++) col.appendChild(buildGroupEl(items[i], forceOpen)); content.appendChild(col); };
   if(GAME.groupCategory){
     // Strict categories: a column never mixes categories.  vis is already sorted category-major
     // (GAME.groupKey), so bucket into contiguous category runs, allocate whole columns per
-    // category by size, then balance each category's groups within its own columns.
+    // category by size, then balance each category's groups within its own columns.  When the game
+    // names its categories (GAME.categoryTitle), each column is topped with that category's title.
     const cats=[]; let cur=null;
     vis.forEach(v=>{ const c=GAME.groupCategory(v.group.recs[0]);
       if(!cur||cur.id!==c){ cur={id:c, items:[]}; cats.push(cur); } cur.items.push(v); });
@@ -931,8 +986,9 @@ function _renderList(){
     const maxes=cats.map(c=>c.items.length);
     const alloc=allocateColumns(weights, maxes, K);
     cats.forEach((c,ci)=>{
+      const title=GAME.categoryTitle ? GAME.categoryTitle(c.id) : '';
       balancedColumns(c.items.map(gw), Math.min(alloc[ci], c.items.length))
-        .forEach(([s,e])=>addCol(c.items,s,e));
+        .forEach(([s,e])=>addCol(c.items,s,e,title));
     });
   } else {
     const k=Math.min(K, vis.length);

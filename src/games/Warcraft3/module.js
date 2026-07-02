@@ -125,7 +125,9 @@ function modString(ctrl, alt, shift) {
 var DATA = null;            // the raw dataset
 var DEFAULTS = '';          // bundled default CustomKeys.txt text (the "good defaults")
 var NAMESDATA = {};         // code -> name from the SLK tables (data.names), for Miscellaneous labels
+var ICONS = {};             // lower-cased command code -> classic icon basename (data.icons.classic)
 var CAMPAIGN = {};          // unit key -> 1 for campaign-only units (from index.html Campaign lists)
+var BUILD_TARGET = {};      // unit key -> 1 for build sub-menus (a unit's `build` target, e.g. cmdbuildhuman)
 var UNIT_ORDER = [];        // unit keys, sorted for a sensible grouped list
 var UNIT_CARD = {};         // unit key -> [[code, name], ...] (the unit's own commands only)
 var UNIT_LABEL = {};        // unit key -> "Race -- Name" (the group / context label)
@@ -147,7 +149,9 @@ function setData(d) {
   DATA = (d && d.units) ? d : null;
   DEFAULTS = (d && d.defaults) || '';
   NAMESDATA = (d && d.names) || {};
+  ICONS = (d && d.icons && d.icons.classic) || {};
   CAMPAIGN = {}; ((d && d.campaign) || []).forEach(function (c) { CAMPAIGN[c] = 1; });
+  BUILD_TARGET = {};
   UNIT_ORDER = []; UNIT_CARD = {}; UNIT_LABEL = {}; COMMON_ORDER = [];
   if (!DATA) return;
   // Only browsable/playable units (the curated `shown` allowlist), plus the build sub-menus
@@ -156,7 +160,7 @@ function setData(d) {
   (DATA.shown || Object.keys(DATA.units)).forEach(function (k) { if (DATA.units[k]) include[k] = 1; });
   Object.keys(include).forEach(function (k) {
     var b = DATA.units[k] && DATA.units[k].build;
-    if (b && DATA.units[b]) include[b] = 1;
+    if (b && DATA.units[b]) { include[b] = 1; BUILD_TARGET[b] = 1; }
   });
   Object.keys(include).forEach(function (key) {
     var u = DATA.units[key];
@@ -164,7 +168,12 @@ function setData(d) {
     var card = new Map();                                     // dedupe by code (last name wins)
     u.commands.forEach(function (c) { card.set(c[0], c[1]); });
     UNIT_CARD[key] = Array.from(card.entries());
-    UNIT_LABEL[key] = (RACE_LABEL[u.race] || u.race || 'Neutral') + ' — ' + (u.name || key);
+    // The race filter already scopes the list to a race, so a "Human — " prefix on every Human
+    // card is noise.  Drop it for the four main (natively selectable) races; keep it for folded
+    // campaign races (Blood Elf, Draenei, Demon, Naga) that share a main race's filter, where it
+    // disambiguates (e.g. "Blood Elf — Dragonhawk Rider" under the Human filter).
+    UNIT_LABEL[key] = (MAIN_RACES[u.race] ? '' : (RACE_LABEL[u.race] || u.race || 'Neutral') + ' — ')
+      + (u.name || key);
     UNIT_ORDER.push(key);
   });
   UNIT_ORDER.sort(function (a, b) {
@@ -330,6 +339,17 @@ function bindings(doc) {
   return recs;
 }
 
+// A record's ability icon (classic set) for the on-keyboard card overlay -- the engine drops it on
+// the key a command is bound to when its card is selected.  Keyed by the binding's command code; the
+// URL is relative to the built page (site/warcraft3/index.html -> site/warcraft3/icons/classic/*.png),
+// so it works on a static host or opened straight off disk.  Returns null when no icon is mapped
+// (e.g. a Miscellaneous rawcode the classic set doesn't cover) -- the engine just skips it.
+function iconOf(rec) {
+  var code = rec && rec.e && rec.e.codeLc;
+  var base = code && ICONS[code];
+  return base ? 'icons/classic/' + base + '.png' : null;
+}
+
 // Every command name comes from the game's own strings files (NAMESDATA = data.names, the real
 // localized display names -- see data/gen_wc3_names.py): unit-card commands, common commands,
 // globals, and the Miscellaneous tail all resolve through it, so the labels match what the game
@@ -339,7 +359,8 @@ var NAMES = {};
 
 // Global-command families -> a display group + conflict scope + which column category they land in.
 // The melee-relevant globals share one 'global' scope (so a key reused across them flags) and sit
-// in the first (common) category; observer/replay are a separate 'spectator' scope, placed last.
+// in the first (common) category; observer/replay share that column too but form a separate
+// 'spectator' conflict scope (they can't clash with in-game play).
 var GLOBAL = {
   ctrl:     { set: 'global',    group: 'Control Groups' },
   camera:   { set: 'global',    group: 'Camera' },
@@ -438,28 +459,44 @@ function recFilters(r) {
 // column ordering: cluster by category, then race, then group name.  The engine partitions this
 // order into contiguous columns.  Category order: common -> heroes -> units -> buildings ->
 // campaign (units that only appear in campaign, not melee; the Miscellaneous catch-all shares this
-// column group) -> spectator (observer/replay).  Campaign-only units go to the campaign bucket
-// regardless of their unit type, so the melee categories are melee-relevant.
-var CAT_RANK = { hero: 1, unit: 2, summon: 2, item: 2, noAttack: 2, building: 3, tower: 3, other: 4 };
-var CAT_CAMPAIGN = 4, CAT_SPECTATOR = 5;   // Miscellaneous shares CAT_CAMPAIGN; spectator trails last
-// set-scope -> column category. Common cards + melee globals share the first (common) category;
-// the spectator scope (observer/replay) trails last.
-var SET_CAT = { basic: 0, hero: 0, noAttack: 0, tower: 0, global: 0, spectator: CAT_SPECTATOR };
+// column group).  Campaign-only units go to the campaign bucket regardless of their unit type, so
+// the melee categories are melee-relevant.  The `other` type is real melee units the dataset
+// didn't classify (e.g. the Gargoyle) -> Units; build sub-menus (also type `other`) are handled
+// separately in catOf and land with Buildings.
+var CAT_RANK = { hero: 1, unit: 2, summon: 2, item: 2, noAttack: 2, building: 3, tower: 3, other: 2 };
+var CAT_CAMPAIGN = 4;   // Miscellaneous shares CAT_CAMPAIGN (the melee campaign column group)
+// set-scope -> column category. Common cards, the melee globals, and the spectator scope
+// (observer/replay) all share the first (common) category so the global hotkeys stay in one
+// column instead of stranding observer/replay in a sparse column of their own. Spectator keeps
+// its separate *conflict* scope (see context()); this only controls column placement.
+var SET_CAT = { basic: 0, hero: 0, noAttack: 0, tower: 0, global: 0, spectator: 0 };
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function catOf(r) {
   if (r.set) return SET_CAT[r.set] != null ? SET_CAT[r.set] : 0;
-  if (r.unit) return CAMPAIGN[r.unit] ? CAT_CAMPAIGN : (CAT_RANK[DATA.units[r.unit].type] || CAT_CAMPAIGN);
+  if (r.unit) {
+    if (CAMPAIGN[r.unit]) return CAT_CAMPAIGN;               // campaign-only unit -> campaign column
+    // A build sub-menu is a melee Buildings card only for the four main races; the campaign races'
+    // build menus (Blood Elf / Draenei / Naga) are campaign content -> campaign column.
+    if (BUILD_TARGET[r.unit]) return MAIN_RACES[DATA.units[r.unit].race] ? CAT_RANK.building : CAT_CAMPAIGN;
+    return CAT_RANK[DATA.units[r.unit].type] || CAT_CAMPAIGN;
+  }
   return CAT_CAMPAIGN;                                        // Miscellaneous -> campaign's column group
 }
 function groupKey(r) {
-  // within a category: common cards (raceR -1) first, then melee globals (0), then units by race
-  var raceR = r.set ? (r.set === 'global' || r.set === 'spectator' ? 0 : -1)
-    : r.unit ? RACE_RANK[foldRace(DATA.units[r.unit].race)] : RACE_RANK.neutral;
-  return pad2(catOf(r)) + '|' + pad2(raceR + 1) + '|' + r.group;   // category | race | name
+  // within a category, cards are ordered alphabetically by name; the only non-alphabetical bit is
+  // the Common column's curated tier order: shared common cards (0), then the melee globals (1),
+  // then the spectator globals (2, so observer/replay trail them).  Unit cards carry tier 0, so
+  // they simply sort by name -- races interleave alphabetically instead of clustering by race
+  // (a specific race filter shows one race anyway; this only affects the "All" view).
+  var tier = r.set ? (r.set === 'spectator' ? 2 : r.set === 'global' ? 1 : 0) : 0;
+  return pad2(catOf(r)) + '|' + tier + '|' + r.group;   // category | tier | name
 }
 // the strict-column category id (engine gives each category its own column(s)); matches the
 // leading field of groupKey so categories stay contiguous in the sorted order.
 function groupCategory(r) { return pad2(catOf(r)); }
+// human-readable title the engine prints atop each column, keyed by the groupCategory id
+var CAT_TITLE = { '00': 'Common', '01': 'Heroes', '02': 'Units', '03': 'Buildings', '04': 'Campaign' };
+function categoryTitle(id) { return CAT_TITLE[id] || ''; }
 
 function fileStatus(doc) {
   return doc ? '<span class="chip ok">✓ CustomKeys.txt</span>'
@@ -502,12 +539,14 @@ GAMES.warcraft3 = {
   context: context,
   classify: classify,
   recName: recName,
+  icon: iconOf,              // ability-card icon overlaid on the keyboard when a card is selected
   baseName: function (r) { return r && r.name ? r.name : ''; },
   ctxLabel: ctxLabel,
   filters: FILTERS,          // race filter buttons (engine shows them; AoE2 omits -> no bar)
   recFilters: recFilters,    // which race(s) a record belongs to
   groupKey: groupKey,        // column/category ordering key
-  groupCategory: groupCategory   // strict-column category id (each category gets its own columns)
+  groupCategory: groupCategory,  // strict-column category id (each category gets its own columns)
+  categoryTitle: categoryTitle   // display title the engine prints atop each column of a category
 };
 
 })();

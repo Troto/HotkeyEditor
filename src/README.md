@@ -63,7 +63,10 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
 
 - **On-screen keyboard + mouse**, shaded by how many commands are bound to each key (toggle).
   Click a command → highlight its key; hover → lighter preview; click a key → list its
-  commands; click a group heading → highlight the whole group.
+  commands; click a group heading → highlight the whole group. When the game supplies `icon`,
+  selecting a card (or **hovering** a command row or a group heading) also overlays each of that
+  card's ability icons on the keys they're bound to — the selected card persists, a hover is a
+  temporary preview that reverts on mouse-out (see below).
 - **Rebind** by left-clicking a key button then pressing a key (or clicking a key on the
   visual); right-click to unbind.
 - **QWERTY⇄Dvorak** slide toggle — converts binds *and* relabels the keyboard. This is
@@ -115,6 +118,14 @@ A game module supplies, behind a small interface:
   that defines none of these gets the plain balanced, alphabetical, unfiltered list (e.g. AoE2).
 - **input** — game-specific input bits only: extra mouse buttons and any extra VK labels.
   (Dvorak / keyboard layouts are engine-level, **not** per game.)
+- **icon (optional)** — `icon(rec) → url | null`: an ability/command icon for the record. When a
+  game supplies it, the engine overlays each command's icon on the key it's bound to (the WC3 in-game
+  command card, rendered on the keyboard) for the **selected** card, and as a temporary **hover**
+  preview when the pointer is over a command row or a group heading (the collapse or 👁 button) — the
+  hovered group takes precedence and reverts to the selected card on mouse-out. A game without it
+  (AoE2) shows no icons. The URL is resolved relative to the built page, so games that use image
+  assets ship them next to `site/<game>/index.html` (WC3 copies an `icons/` folder) rather than
+  inlining them.
 - **meta** — display name, file label/accept, load/save help copy, and flags
   (`multiple`, `usesProfileName`, `hasChroniclesToggle`, and optional `defaultsLabel` for the
   "load defaults" button, …). The engine's `applyMeta()` paints this copy into the shell so

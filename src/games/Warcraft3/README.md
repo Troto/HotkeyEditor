@@ -34,6 +34,16 @@ comes from `_GAME_SLUG`, not the folder name.
   record through it, falling back to the jcfields card name only for codes the game files don't name.
   The raw Blizzard SLK/txt tables + `strings/` it's built from are **not vendored** — supply them
   from a game install to regenerate (see `data/SOURCE.md`).
+- **`data/wc3_icons.json`** — `{ classic: code → icon basename }` for the on-keyboard **ability-card
+  icon overlay** (see below), extracted from `data.icons.classic` in the upstream `data.js`. Inlined
+  into the build; `module.js` (`iconOf`) turns a binding's code into `icons/classic/<basename>.png`.
+- **`data/icons/classic/*.png`** — the 734 vendored classic ability icons those basenames reference
+  (from jcfields' `www/icons/classic/`, MIT — see `data/SOURCE.md`). The build **copies this tree next
+  to the page** as `site/warcraft3/icons/` (~8 MB — too large to inline), so it works on any static
+  host or opened straight off disk. Only the classic set is vendored (it covers every carded command;
+  the upstream reforged set is partial — no classic/reforged toggle yet).
+- **`data/gen_wc3_icons.js`** — one-off Node script that (re)builds `wc3_icons.json` and, with
+  `--download`, fetches the classic PNGs into `data/icons/classic/`. Not part of the Python build.
 - **`HotkeyFiles/`** — sample/oracle `.txt` files (not read at runtime except the bundled default,
   which is inlined at build time):
   - **`Sensible Reforged CustomKeys.txt`** — the canonical test fixture **and** the bundled
@@ -48,8 +58,21 @@ comes from `_GAME_SLUG`, not the folder name.
   (or `python3 build.py` for all games). Refreshes the `site/index.html` launcher.
 - **Refresh the dataset** (rare): `node games/Warcraft3/data/gen_wc3_data.js <data.js> <index.html>`
   with the two upstream files (see `data/SOURCE.md`).
+- **Refresh the icons** (rare): `node games/Warcraft3/data/gen_wc3_icons.js <data.js> --download`
+  (rebuilds `wc3_icons.json` + re-vendors `data/icons/classic/`; see `data/SOURCE.md`).
 - **Preview**: build, then `python3 -m http.server 8765` and open
   http://localhost:8765/site/warcraft3/index.html.
+
+## Ability-card icons on the keyboard
+When you select a single command card (click a group heading), each of that card's commands shows
+its **in-game ability icon on the key it's bound to** — so a unit's command card reads on the
+keyboard the way it does in-game (e.g. the Death Knight's Death Coil/Death Pact/Unholy Aura/Animate
+Dead land on C/E/U/D). **Hovering** a command row, or a group heading's collapse or 👁 button, previews
+that group's icons the same way; the hover takes precedence over the selected card and reverts on
+mouse-out. The engine drives this generically through the optional `GAME.icon(rec)` hook (games
+without it — AoE2 — show no icons); this module implements it via `iconOf`, mapping a binding's code
+through `wc3_icons.json` to a relative `icons/classic/<basename>.png`. Icons clear when the card is
+deselected. See `data/SOURCE.md` for the icon provenance.
 
 ## The `CustomKeys.txt` format
 - Plain-text INI: **`[ABCD]`** sections keyed by a 4-char ability/command code, `Key=Value`
@@ -101,7 +124,9 @@ across cards. Cards:
   (control groups, camera, menu, item/hero slots, subgroup) are grouped into named cards
   (**Control Groups**, **Camera**, **Menu Commands**, **Selection & Items**) and placed in the
   first (common) category — they're global melee hotkeys, so they show under every race. Observer/
-  Replay commands are grouped too but treated as spectator-only (placed last). Friendly names come
+  Replay commands are grouped too and share that same common column (trailing the melee globals),
+  but they form a separate `spectator` **conflict** scope so they never clash with in-game play —
+  column placement and conflict scope are independent. Friendly names come
   from a `GLOBAL_NAMES` map keyed by section code — originally transcribed from Reforged's default
   hotkey-options screens and corroborated by the `//` comment the source file places directly
   **above** each section (the screenshots were a one-off reference and are no longer in the repo).
@@ -149,11 +174,24 @@ Both are generic engine features (see root README) that this module drives:
   race** (always shown); a unit → its **folded** race (campaign races map to their base via
   `campaignRaces` — Blood Elf→Human, Draenei→Orc, Demon→Undead, Naga→Night Elf); anything else
   → Neutral.
-- **Column ordering** — `groupKey(rec)` orders groups by **category → race → name**;
-  `groupCategory(rec)` turns on strict per-category columns. Category order:
-  **common → heroes → units → buildings → campaign → other**. A **campaign-only** unit goes to the
-  campaign column regardless of its type, so the melee categories are exactly what's used in a
-  melee match. Build sub-menus (type `other`, melee) group with buildings.
+- **Column ordering** — `groupKey(rec)` orders groups by **category → name** (alphabetical within
+  each column); `groupCategory(rec)` turns on strict per-category columns. Category order:
+  **common → heroes → units → buildings → campaign**. Cards sort alphabetically by name within a
+  category — races **interleave** rather than clustering (a specific race filter shows one race
+  anyway, so this only affects the "All" view); the sole non-alphabetical bit is the **Common**
+  column's curated tier order (shared common cards → melee globals → observer/replay spectator). A **campaign-only** unit (from the `campaign`
+  list) goes to the campaign column regardless of its type, so the melee categories are exactly
+  what's used in a melee match. A **main-race** build sub-menu (type `other`, e.g. `cmdbuildhuman`)
+  is detected in `catOf` and grouped with **Buildings**; the campaign races' build menus
+  (`cmdbuildnaga`/`bloodelf`/`draenei`) go to **Campaign** instead. Any other melee `other`-typed
+  unit (e.g. the Gargoyle) falls to **Units**. The common column also holds the melee globals and
+  the observer/replay (spectator) commands.
+- **Column titles** — `categoryTitle(id)` supplies the header printed atop each column (Common /
+  Heroes / Units / Buildings / Campaign); the engine (`page.html`) renders it when a game defines
+  strict categories.
+- **Card labels** — a unit card's heading is just the unit name for the four main races (the race
+  filter already scopes the list); folded campaign races keep a `Race — ` prefix (e.g.
+  `Blood Elf — …` under the Human filter) to disambiguate. Neutral cards keep their prefix too.
 
 ## Where the data comes from
 `data/wc3.json` is derived from the open-source **jcfieldsdev/warcraft3-hotkey-editor** (MIT) —

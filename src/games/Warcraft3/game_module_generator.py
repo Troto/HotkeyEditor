@@ -14,6 +14,7 @@ Stdlib only (works on Python 3.7).
 """
 import json
 import os
+import shutil
 import sys
 
 _HERE = os.path.dirname(os.path.abspath(__file__))            # games/Warcraft3/
@@ -36,6 +37,7 @@ def build():
     module_path = os.path.join(_HERE, 'module.js')
     data_path = os.path.join(_HERE, 'data', 'wc3.json')
     names_path = os.path.join(_HERE, 'data', 'wc3_names.json')
+    icons_path = os.path.join(_HERE, 'data', 'wc3_icons.json')
     defaults_path = os.path.join(_HERE, 'HotkeyFiles', 'Sensible Reforged CustomKeys.txt')
     try:
         module_js = open(module_path, encoding='utf-8').read()
@@ -51,6 +53,11 @@ def build():
         print('WARNING: %s missing; Miscellaneous commands fall back to file comments/raw codes'
               % os.path.basename(names_path))
     try:
+        with open(icons_path, encoding='utf-8') as f:
+            data['icons'] = json.load(f)       # { classic: code -> icon basename } for the card overlay
+    except FileNotFoundError:
+        print('WARNING: %s missing; keyboard ability-icon overlay disabled' % os.path.basename(icons_path))
+    try:
         # newline='' so the file's original CRLF survives (no universal-newline translation),
         # keeping the bundled defaults byte-for-byte identical to the source file.
         with open(defaults_path, encoding='utf-8', newline='') as f:
@@ -64,7 +71,28 @@ def build():
         print('ERROR: %s' % e)
         return None
     print('wrote site/%s/index.html (%d KB)' % (_GAME_SLUG, nbytes // 1024))
+    _copy_icons(os.path.dirname(out_path))
     return (_GAME_SLUG, _GAME_NAME)
+
+
+def _copy_icons(out_dir):
+    """Copy the vendored ability icons next to the built page (site/warcraft3/icons/).
+
+    The page can't inline ~8 MB of PNGs, so the module references them relatively
+    (icons/classic/<name>.png -- see module.js iconOf); this ships that folder alongside
+    index.html.  Works on any static host and when the file is opened straight off disk.  A
+    plain copy (mirrors the source tree, overwriting) so a removed source icon is pruned too.
+    """
+    src = os.path.join(_HERE, 'data', 'icons')
+    if not os.path.isdir(src):
+        print('WARNING: %s missing; no ability icons copied to site/' % os.path.relpath(src, _ROOT))
+        return
+    dst = os.path.join(out_dir, 'icons')
+    if os.path.isdir(dst):
+        shutil.rmtree(dst)
+    shutil.copytree(src, dst)
+    n = sum(len(files) for _, _, files in os.walk(dst))
+    print('copied %d ability icons to site/%s/icons/' % (n, _GAME_SLUG))
 
 
 if __name__ == '__main__':

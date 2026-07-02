@@ -48,9 +48,28 @@ J.C. Fields:
 
 We use it to turn the raw 4-char ability/command codes in `CustomKeys.txt` into friendly
 names, to group bindings by their in-game command card, and to detect per-card hotkey
-conflicts. We did **not** copy the upstream icon map (`data.icons`) or its editor code — only
-the data tables listed above, re-serialised to JSON (`type` enum ints mapped to short strings;
-codes matched case-insensitively, as the game itself does).
+conflicts. We copied the data tables listed above (re-serialised to JSON: `type` enum ints
+mapped to short strings; codes matched case-insensitively, as the game itself does) but **not**
+the editor code.
+
+### Ability icons (`wc3_icons.json` + `icons/classic/`)
+
+We **also** copy the upstream **classic** icon set — the `data.icons.classic` half of the map
+plus the referenced `www/icons/classic/*.png` files — used for the on-keyboard ability-card
+overlay (when a command card is selected, each command's icon is shown on the key it's bound to).
+
+- **`wc3_icons.json`** — `{ classic: { <command code> → <icon basename> } }`, extracted from
+  `data.icons.classic.commands` in `data.js`. Inlined into the build and read by `module.js`
+  (`iconOf`) to turn a binding's code into `icons/classic/<basename>.png`.
+- **`icons/classic/*.png`** — the 734 unique PNGs those basenames reference, vendored from
+  `www/icons/classic/`. The build (`game_module_generator.py`) copies this tree next to the page
+  as `site/warcraft3/icons/` (the page is too large to inline ~8 MB of images), so it works on any
+  static host or opened straight off disk.
+- Only the **classic** set is vendored: it maps every carded command, whereas the upstream
+  **reforged** set (`data.icons.reforged`) is partial. The editor's classic/reforged icon toggle is
+  not implemented (yet).
+
+Both are (re)built by the one-off Node script **`gen_wc3_icons.js`** (see *Regenerating*).
 
 ## Regenerating
 
@@ -62,9 +81,19 @@ node gen_wc3_data.js path/to/data.js path/to/index.html
 ```
 
 which evaluates data.js and writes `{units, common, buildCommands, campaignRaces, shown}` with
-the `type` enum mapped to strings, the `icons` table dropped, and `shown` extracted from the
-index.html anchor links. (Kept out of the Python build toolchain on purpose: there is no
-game-install dependency and the data rarely moves.)
+the `type` enum mapped to strings, the `icons` table dropped (icons are handled separately, below),
+and `shown` extracted from the index.html anchor links. (Kept out of the Python build toolchain on
+purpose: there is no game-install dependency and the data rarely moves.)
+
+The **icons** are refreshed by a second one-off script:
+
+```
+node gen_wc3_icons.js path/to/data.js --download
+```
+
+which rewrites `wc3_icons.json` from `data.icons.classic.commands` and downloads the referenced
+classic PNGs into `icons/classic/`. Omit `--download` to only rebuild the JSON from a local
+`data.js`. (Also kept out of the Python build for the same reason.)
 
 ## MIT License notice (retained per the license terms)
 
