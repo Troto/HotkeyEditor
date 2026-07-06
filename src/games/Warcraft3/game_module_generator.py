@@ -37,7 +37,9 @@ def build():
     module_path = os.path.join(_HERE, 'module.js')
     data_path = os.path.join(_HERE, 'data', 'wc3.json')
     names_path = os.path.join(_HERE, 'data', 'wc3_names.json')
+    items_path = os.path.join(_HERE, 'data', 'wc3_items.json')
     icons_path = os.path.join(_HERE, 'data', 'wc3_icons.json')
+    positions_path = os.path.join(_HERE, 'data', 'positions.json')
     defaults_path = os.path.join(_HERE, 'HotkeyFiles', 'Sensible Reforged CustomKeys.txt')
     try:
         module_js = open(module_path, encoding='utf-8').read()
@@ -53,10 +55,21 @@ def build():
         print('WARNING: %s missing; Miscellaneous commands fall back to file comments/raw codes'
               % os.path.basename(names_path))
     try:
+        with open(items_path, encoding='utf-8') as f:
+            data['items'] = json.load(f)       # item code -> shop/powerup/campaign (gen_wc3_items.py)
+    except FileNotFoundError:
+        print('WARNING: %s missing; item-purchase hotkeys stay in Miscellaneous'
+              % os.path.basename(items_path))
+    try:
         with open(icons_path, encoding='utf-8') as f:
             data['icons'] = json.load(f)       # { classic: code -> icon basename } for the card overlay
     except FileNotFoundError:
         print('WARNING: %s missing; keyboard ability-icon overlay disabled' % os.path.basename(icons_path))
+    try:
+        with open(positions_path, encoding='utf-8') as f:
+            data['positions'] = json.load(f)   # code -> 4x3 command-card slot (gen_wc3_positions.py)
+    except FileNotFoundError:
+        print('WARNING: %s missing; command-card grid panel disabled' % os.path.basename(positions_path))
     try:
         # newline='' so the file's original CRLF survives (no universal-newline translation),
         # keeping the bundled defaults byte-for-byte identical to the source file.

@@ -34,6 +34,18 @@ comes from `_GAME_SLUG`, not the folder name.
   record through it, falling back to the jcfields card name only for codes the game files don't name.
   The raw Blizzard SLK/txt tables + `strings/` it's built from are **not vendored** — supply them
   from a game install to regenerate (see `data/SOURCE.md`).
+- **`data/wc3_items.json`** — `code → "melee" | "campaign" | "hidden"` for every item, built by
+  **`data/gen_wc3_items.py`** from Blizzard's `itemdata.slk` + the `slk data/*func.txt` profiles. Item
+  *purchase* hotkeys have no shop card in the base game data (only the Goblin Merchant carries a fixed
+  `Sellitems=` list — everything else is placed per-map in the World Editor), **and** WC3 templates
+  every item with the same fields, so most of these purchase sections are boilerplate the game never
+  uses. The generator tags each item by whether its purchase hotkey is ever **reachable in a match** —
+  in a shop's `Sellitems=` list, on a shop card (`Buttonpos`), or in the random drop/marketplace pool
+  (`pickRandom`): `"melee"` (reachable), `"campaign"` (`class=Campaign` quest item), or `"hidden"`
+  (ruled out — no shop/pool offers it). Inlined into the build; `module.js` (`bindings()`) sends
+  `melee` → the **Items** column, `campaign` → the Campaign column, and **drops `hidden` from the
+  list** (`hidden:true`; the section still round-trips on save). (`droppable` is a red herring — it's
+  `1` for ~every item, a template default, not a usage signal.)
 - **`data/wc3_icons.json`** — `{ classic: code → icon basename }` for the on-keyboard **ability-card
   icon overlay** (see below), extracted from `data.icons.classic` in the upstream `data.js`. Inlined
   into the build; `module.js` (`iconOf`) turns a binding's code into `icons/classic/<basename>.png`.
@@ -44,6 +56,13 @@ comes from `_GAME_SLUG`, not the folder name.
   the upstream reforged set is partial — no classic/reforged toggle yet).
 - **`data/gen_wc3_icons.js`** — one-off Node script that (re)builds `wc3_icons.json` and, with
   `--download`, fetches the classic PNGs into `data/icons/classic/`. Not part of the Python build.
+- **`data/positions.json`** — `code → command-card slot` maps (`b`/`r`/`u`) for the **command-card
+  grid panel** (see below). Inlined into the build; `module.js` (`slotOf`) reads it.
+- **`data/gen_wc3_positions.py`** — one-off Python script that (re)builds `positions.json` from the
+  `Buttonpos` lines in `data/slk data/*func.txt`. Stdlib only; not part of the Python build.
+- **`data/slk data/`** — the vendored game data tables (`*.slk`) and profile text files (`*func.txt`,
+  `*skin.txt`, …) the generator scripts read; only `gen_wc3_positions.py` uses them today (for the
+  `Buttonpos` values, which aren't in the SLKs). See `data/SOURCE.md`.
 - **`HotkeyFiles/`** — sample/oracle `.txt` files (not read at runtime except the bundled default,
   which is inlined at build time):
   - **`Sensible Reforged CustomKeys.txt`** — the canonical test fixture **and** the bundled
@@ -60,6 +79,10 @@ comes from `_GAME_SLUG`, not the folder name.
   with the two upstream files (see `data/SOURCE.md`).
 - **Refresh the icons** (rare): `node games/Warcraft3/data/gen_wc3_icons.js <data.js> --download`
   (rebuilds `wc3_icons.json` + re-vendors `data/icons/classic/`; see `data/SOURCE.md`).
+- **Refresh the card-grid positions** (rare): `python3 games/Warcraft3/data/gen_wc3_positions.py`
+  (rebuilds `positions.json` from `data/slk data/*func.txt`; stdlib only).
+- **Refresh the item categories** (rare): `python3 games/Warcraft3/data/gen_wc3_items.py`
+  (rebuilds `wc3_items.json` from `data/slk data/itemdata.slk` + the `*func.txt` profiles; stdlib only).
 - **Preview**: build, then `python3 -m http.server 8765` and open
   http://localhost:8765/site/warcraft3/index.html.
 
@@ -73,6 +96,36 @@ mouse-out. The engine drives this generically through the optional `GAME.icon(re
 without it — AoE2 — show no icons); this module implements it via `iconOf`, mapping a binding's code
 through `wc3_icons.json` to a relative `icons/classic/<basename>.png`. Icons clear when the card is
 deselected. See `data/SOURCE.md` for the icon provenance.
+
+## Command-card grid panel
+Alongside the keyboard overlay, selecting (or hovering) a card also draws that card as its real
+**in-game 4×3 command grid** in the right gutter — each command's icon + bound key dropped into its
+actual button slot, so the Barracks reads Footman/Rifleman/Knight across the top row, upgrades along
+the bottom, Cancel bottom-right, exactly as in-game. The engine renders this generically from the
+optional `GAME.slot(rec)` hook (games without it show no panel); the card geometry is `meta.cardCols`
+× `meta.cardRows` (WC3 is **4×3**, AoE2 is 5×3). A **hero** additionally exposes `GAME.learnSlot`
+(`Researchbuttonpos`, POS.r), so the engine draws its **learn** sub-card as a second grid beside the
+command card — the ability icons at their learn-button slots (top row) next to the same abilities on
+the command card. The key label is a top-left corner badge on each slot (as in-game), and
+selecting/hovering a command highlights its slot.
+
+`slotOf` maps a binding's code through **`data/positions.json`** — three `code → slot` maps
+(`b` = the command's own command-card button = `Buttonpos`; `r` = the hero *learn* sub-card button =
+`Researchbuttonpos`; `u` = a two-state toggle's off-state = `Unbuttonpos`), slot numbered row-major
+from the top-left (`slot = row*4 + col`). It uses **`b` (the ability's own button)** for everything,
+so the whole card reads together (a Paladin's Holy Light / Devotion Aura / Resurrection all on the
+bottom row); an *Off* row uses `u`. It deliberately does **not** use `r`: that's the learn sub-card
+(top row), so a passive aura — whose only binding is its learn key (`Researchhotkey`) — still shows
+at its command-card `Buttonpos`, next to the actives, not at its learn-button slot. `null` for
+commands with no fixed card slot — shop items and mercenaries are laid out from the building's sell
+list at runtime, not a fixed `Buttonpos`, so they simply don't appear in the grid.
+
+- **`data/positions.json`** — generated by **`data/gen_wc3_positions.py`** from the game's profile
+  text files (`data/slk data/*func.txt`), which carry each command's `Buttonpos`/`Researchbuttonpos`/
+  `Unbuttonpos=X,Y`. (The button position is *not* in the data SLKs — that field's `slk` source is
+  "Profile".) Regenerate with `python3 games/Warcraft3/data/gen_wc3_positions.py`; see `data/SOURCE.md`
+  for where the `slk data/` profiles come from. Coverage is ~89% of command codes (all melee
+  ability/unit/upgrade/research cards; the gaps are shop/mercenary/campaign-only entries).
 
 ## The `CustomKeys.txt` format
 - Plain-text INI: **`[ABCD]`** sections keyed by a 4-char ability/command code, `Key=Value`
@@ -100,7 +153,16 @@ trailing newline). `save()`:
 - **mirrors `Researchhotkey` → `Hotkey`** when a section has both and the Hotkey changed (they're
   identical in practice — see below);
 - rewrites / inserts / removes the per-section `Modifier=` line to match ctrl/alt/shift (structural
-  add/remove done last so line indices stay valid).
+  add/remove done last so line indices stay valid);
+- rewrites (or inserts) a section's `Buttonpos`/`Unbuttonpos`/`Researchbuttonpos` line for
+  **command-card position edits** made by dragging a slot in the grid panel (`GAME.setSlot` →
+  `setSlotDoc`). The `card` arg picks the field: a command-grid drag writes `Buttonpos` (or
+  `Unbuttonpos` for an off-state), a learn-grid drag writes `Researchbuttonpos`. `parse` records
+  each section's position-line index + original slot (`posLines`/`posOrig`); a drag stashes the new
+  slot on the section (`_posEdit`), `save` writes it as `X,Y` (`slot = Y*4 + X`) in place or inserts
+  a line where none existed, queued with the modifier structural ops. It also updates the live
+  `POS.b`/`POS.u`/`POS.r` map so the panel repaints at once. Dragging a command back to its file
+  original drops the edit, so a section never *net*-moved stays byte-exact.
 
 VK model: letter↔VK (`Q`↔81), numeric VK passthrough (Esc=27…), comma-list read as level-1 and
 the level count remembered; a rebind writes every level.
@@ -114,7 +176,12 @@ section × channel) — these are the engine's entries (`forEachEntry`/`save` it
 many cards, so the same binding is emitted once per card, all records **sharing the binding's
 `id`/`e`**. The engine already (a) groups records by `id` so one edit propagates to every card,
 and (b) skips same-`id` pairs in conflict detection so an ability never clashes with itself
-across cards. Cards:
+across cards. `emitCommand` also **dedupes a binding per card** (keyed by group + id): units that
+share a display name fold into one group — most often a building and its `_campaign` twin (e.g.
+`halt` / `halt_campaign`, both "Altar of Kings") — and since the generic building commands are
+literally the same line (`cmdrally` = Set Rally Point, `cmdcancelbuild` = Cancel), without this
+they'd show twice on the card. The same line still appears on genuinely different cards, once each.
+Cards:
 - **Shared common cards** — `Common — Unit / Hero / Non-attacking / Tower Commands` (Move, Stop,
   Attack, …). Shown once each rather than repeated under every unit; they still conflict against a
   unit's abilities (see below).
@@ -130,14 +197,32 @@ across cards. Cards:
   from a `GLOBAL_NAMES` map keyed by section code — originally transcribed from Reforged's default
   hotkey-options screens and corroborated by the `//` comment the source file places directly
   **above** each section (the screenshots were a one-off reference and are no longer in the repo).
-- **Miscellaneous** — bindings that are neither on a card nor a tagged global (abilities for
-  campaign/neutral/custom units the dataset has no card for — often extra instances of an ability
-  that IS carded elsewhere, e.g. a second Anti-magic Shell rawcode, or item pickups like runes,
-  Shadow Orbs, scrolls). This group sits in the **same column category as Campaign**. Nothing is
-  hidden. A record's name is `NAMES[code] || wc3_names.json[code] || the section's // comment ||
-  raw code`: `wc3_names.json` (~2268 codes, real display names from the game's strings files) names
-  everything; `NAMES` is an (empty) manual-override map for any edge case the game data gets wrong.
-  In the bundled default, nothing stays raw.
+- **Items** — item *purchase* hotkeys, lifted out of the Miscellaneous tail via `wc3_items.json`. The
+  ones **reachable in a match** (`"melee"`: in a shop's `Sellitems`, on a shop card `Buttonpos`, or in
+  the random drop/marketplace pool `pickRandom`) form the **Neutral Items** group in their own **Items**
+  column; **Campaign Items** (`class=Campaign`: Shadow Orb Fragment, Wirt's Leg, …) go to the Campaign
+  column. The rest — templated purchase sections no shop or pool ever offers — are **`"hidden"`** (see
+  below). Items carry no unit/set scope, so — like Miscellaneous — they never raise conflicts (a given
+  shop's live stock is per-map, so we don't treat the whole pool as one card).
+- **Miscellaneous** — the genuine remainder: bindings that are neither on a card, a tagged global, nor
+  an item — neutral **build/summon** commands (Build Mercenary Camp/Tavern/Dragon Roost, Summon
+  Clockwerk Goblin, …) and a few uncarded neutral abilities, for which the vendored game data carries
+  **no ownership link** (their owning unit/shop isn't in the base SLK/func tables — it's per-map). This
+  group sits in the **same column category as Campaign**. A record's name is `NAMES[code] ||
+  wc3_names.json[code] || the section's // comment || raw code`: `wc3_names.json` (~2268 codes, real
+  display names from the game's strings files) names everything; `NAMES` is an (empty) manual-override
+  map for any edge case the game data gets wrong. In the bundled default, nothing stays raw.
+- **Hidden (`hidden:true`)** — dropped from the list but kept in the file (they still round-trip
+  byte-exact on save), because their hotkey can't fire in a real match. Two sources:
+  - **Ruled-out template items** — item purchase sections tagged `"hidden"` by `wc3_items.json`: WC3
+    templates every item alike, so these are boilerplate no shop or drop/marketplace pool offers (e.g.
+    the `Miscellaneous`-class duplicate rawcodes — Ring of the Archmagi ×3 — and non-pooled runes/
+    glyphs). ~89 of the bundled default's Miscellaneous tail.
+  - **Orphan ability rawcodes** — a small `HIDE` set, each a *second* code for an ability already
+    carded on a live melee unit under a different code and used by **no** unit in the dataset (e.g.
+    `aams` Anti-magic Shell → carded `aam2`, `edcm` Train Druid of the Claw → `edoc`). Editing the live
+    carded copy is what rebinds the in-game key. If the dataset changes, re-verify each is still
+    orphaned (used by no unit) before trusting the list.
 
 Every carded/common command name is resolved the same way — through `wc3_names.json` (the game's
 own strings, preferring the `Tip=` action label), with the jcfields `wc3.json` card label used only
@@ -176,7 +261,8 @@ Both are generic engine features (see root README) that this module drives:
   → Neutral.
 - **Column ordering** — `groupKey(rec)` orders groups by **category → name** (alphabetical within
   each column); `groupCategory(rec)` turns on strict per-category columns. Category order:
-  **common → heroes → units → buildings → campaign**. Cards sort alphabetically by name within a
+  **common → heroes → units → buildings → campaign → items** (the trailing Items column holds the
+  neutral shop / powerup item-purchase hotkeys). Cards sort alphabetically by name within a
   category — races **interleave** rather than clustering (a specific race filter shows one race
   anyway, so this only affects the "All" view); the sole non-alphabetical bit is the **Common**
   column's curated tier order (shared common cards → melee globals → observer/replay spectator). A **campaign-only** unit (from the `campaign`
@@ -187,11 +273,13 @@ Both are generic engine features (see root README) that this module drives:
   unit (e.g. the Gargoyle) falls to **Units**. The common column also holds the melee globals and
   the observer/replay (spectator) commands.
 - **Column titles** — `categoryTitle(id)` supplies the header printed atop each column (Common /
-  Heroes / Units / Buildings / Campaign); the engine (`page.html`) renders it when a game defines
-  strict categories.
+  Heroes / Units / Buildings / Campaign / Items); the engine (`page.html`) renders it when a game
+  defines strict categories.
 - **Card labels** — a unit card's heading is just the unit name for the four main races (the race
   filter already scopes the list); folded campaign races keep a `Race — ` prefix (e.g.
-  `Blood Elf — …` under the Human filter) to disambiguate. Neutral cards keep their prefix too.
+  `Blood Elf — …` under the Human filter) to disambiguate. Genuinely neutral units take a trailing
+  `… (Neutral)` tag instead (e.g. `Voidwalker (Neutral)`), so they read as the unit name and
+  interleave alphabetically by it.
 
 ## Where the data comes from
 `data/wc3.json` is derived from the open-source **jcfieldsdev/warcraft3-hotkey-editor** (MIT) —
@@ -216,8 +304,8 @@ conflict-free starting set.
   `HotkeyFiles/Sensible Reforged CustomKeys.txt`.
 - Case-folded section collisions: `byCode` keeps the first block (matching the game); the rest of
   the binds still round-trip on save.
-- A single command **group can't split across columns**, so the one large **Miscellaneous** group
-  stays a tall single column (in the Campaign column category).
+- A single command **group can't split across columns**, so a large group (e.g. **Neutral Items**,
+  or **Miscellaneous** in the Campaign category) stays a tall single column.
 - No `--regen`: to change the dataset, rerun `data/gen_wc3_data.js` against the upstream files.
 
 ## Provenance / licensing

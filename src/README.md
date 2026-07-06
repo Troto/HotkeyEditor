@@ -10,7 +10,8 @@ that game's file format, command data, and conflict rules. Each game builds to i
 self-contained page.
 
 - **Currently supported:** Age of Empires II: DE — see **[games/aoe2/README.md](games/aoe2/README.md)**;
-  Warcraft III (classic/Reforged `CustomKeys.txt`) — see **[games/Warcraft3/README.md](games/Warcraft3/README.md)**.
+  Warcraft III (classic/Reforged `CustomKeys.txt`) — see **[games/Warcraft3/README.md](games/Warcraft3/README.md)**;
+  StarCraft II (LotV multiplayer `.SC2Hotkeys`) — see **[games/Starcraft2/README.md](games/Starcraft2/README.md)**.
 
 ## How it runs
 
@@ -67,8 +68,43 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
   selecting a card (or **hovering** a command row or a group heading) also overlays each of that
   card's ability icons on the keys they're bound to — the selected card persists, a hover is a
   temporary preview that reverts on mouse-out (see below).
+- **Auto-sized keyboard region.** The sticky header (`#kbwrap`) is a three-column
+  `.kbstage` grid: a capped-width left column (`.kbside`), the centred keyboard (`.kb`), and
+  the command-card panel (`.cardpanel`). The left column stacks, top-to-bottom: the checkbox
+  options (`.kbtools`, laid out side by side — shade, show instructions, show Chronicles, and
+  **show numpad / show nav keys**, both off by default so the `.kbsec-num` / `.kbsec-nav` blocks
+  start hidden and the rest of the keyboard scales up larger), the **hide-conflicts** option
+  (`.conflicttools`), the **conflict panel** — which
+  is `flex: 1 1 0; min-height` so it fills the leftover height and *scrolls its own overflow*,
+  keeping a long conflict list from growing the sticky header and pushing the command list
+  offscreen (the fixed rows keep their natural height) — and below it the list tools
+  (collapse/expand with the filter box inline to their right) and the category filter when a game
+  supplies `filters` (e.g. WC3 races). Nothing is stacked above or below the keyboard, so the
+  keyboard and command card (both vertically centred in the row) own the full vertical space.
+  `fitKeyboard()` then scales the keyboard to fill it: every key/gap/card-slot dimension is a
+  `calc()` on the CSS vars `--ku` (key unit) / `--kg` (gap) on `#kbwrap`, so it measures the
+  keyboard at the 34px reference and sets `--ku` to the largest value (clamped 26–54px) that fits
+  both the available height (viewport minus header, less a reserve for the list) and the centre
+  column's width. The keyboard carries a little top/bottom padding for breathing room, and the
+  command-card slots are sized by a separate `--cu` — a modest size, shrunk only so up to two cards
+  (command + hero learn) still fit side by side in the right gutter; the card is a small grid
+  centred in its space (not stretched to the keyboard's height), with the slot key label a corner
+  badge that scales with `--cu`. The mouse visual
+  rides a dampened `--mscale` (half the keyboard's growth rate — a modest sidekick, not a rival),
+  and is omitted entirely for games with no bindable mouse buttons (e.g. WC3). Runs on load,
+  resize, layout (QWERTY⇄Dvorak) re-render, the show-numpad/nav toggles, and instructions-band
+  toggle. The `34px`/`4px`/`1` fallbacks keep the help-panel sample keys (outside `#kbwrap`) at
+  original size.
 - **Rebind** by left-clicking a key button then pressing a key (or clicking a key on the
-  visual); right-click to unbind.
+  visual); right-click to unbind. The same rebind capture can be started from a **command-card
+  slot** — click a filled slot and it prompts "press a key…" just like the list-row button.
+- **Reposition on the command card** (opt-in per game via `GAME.setSlot`) — drag a slot to an
+  empty slot to move that command, or onto a filled slot to swap the two; the module writes the
+  new position back to the file (WC3's `Buttonpos`). A slot shared by more than one command shows a
+  conflict ring **only** when two of them genuinely clash per the game's conflict rules (ring colored
+  by severity); commands that merely share a slot without clashing — e.g. AoE2's civ-exclusive
+  alternatives, where each civ fields only one — get a neutral corner count of how many are stacked
+  instead. Games without `GAME.setSlot` (e.g. AoE2) get a read-only card with click-to-rebind.
 - **QWERTY⇄Dvorak** slide toggle — converts binds *and* relabels the keyboard. This is
   **game-agnostic**: a bind is a virtual-key code, and remapping VK codes between layouts is
   independent of the game (a load is interpreted as the current toggle position).
@@ -79,7 +115,9 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
   single-select bar that narrows the list, composing with the search box. Absent for AoE2.
 - **Strict category columns** (when a game supplies `groupCategory`) — instead of one balanced
   split across all groups, each category keeps its own whole columns (never mixed) and longer
-  categories get proportionally more columns. Absent for AoE2 (keeps the balanced split).
+  categories get proportionally more columns. WC3 (Common/Heroes/Units/Buildings/Campaign), SC2
+  (General/Units/Buildings/Global), and AoE2 (Common/Units/Buildings/Global/Chronicles) all use it;
+  AoE2 derives the category from each command's existing conflict-context code (no filter bar).
 - **Start from bundled defaults** (when a game provides them) — a one-click button loads a
   built-in default file, so you can begin editing without picking your own file first.
 - **Conflict framework:** the engine pairs up every two commands that share the exact combo
@@ -115,7 +153,8 @@ A game module supplies, behind a small interface:
   `groupCategory(rec) → id` turns on strict per-category columns (categories never share a column,
   longer ones get more columns); `filters → [{id,label}]` (+ `meta.filterLabel`) renders the
   filter-button bar and `recFilters(rec) → [id]` decides which buttons a record belongs to. A game
-  that defines none of these gets the plain balanced, alphabetical, unfiltered list (e.g. AoE2).
+  may mix and match: AoE2 supplies `groupKey`/`groupCategory` (strict columns) but no `filters` (no
+  filter bar); a game that defines none of these gets the plain balanced, alphabetical, unfiltered list.
 - **input** — game-specific input bits only: extra mouse buttons and any extra VK labels.
   (Dvorak / keyboard layouts are engine-level, **not** per game.)
 - **icon (optional)** — `icon(rec) → url | null`: an ability/command icon for the record. When a
@@ -126,11 +165,23 @@ A game module supplies, behind a small interface:
   shows no icons. The URL is resolved relative to the built page, so games that use image
   assets ship them next to `site/<game>/index.html` (WC3 and AoE2 each copy an `icons/` folder) rather
   than inlining them.
-- **slot (optional)** — `slot(rec) → 0..14 | null`: the record's slot in its building's in-game 5×3
-  command card (`row = slot//5`, `col = slot%5`). When a game supplies it, selecting/hovering a card
-  whose commands have slots renders that card as a grid panel beside the keyboard (each command's icon +
-  bound key in its real slot), tracking the same selected/hover card as `icon`. `null` for records with
-  no mapped slot; a group with no slotted records shows no panel. AoE2 supplies it (`positions.json`).
+- **slot (optional)** — `slot(rec) → slot index | null`: the record's slot in its building/unit's
+  in-game command card, numbered row-major from the top-left (`row = slot // cols`, `col = slot % cols`).
+  The card's geometry is per game via `meta.cardCols`/`meta.cardRows` (default 5×3): AoE2 is 5×3, WC3 is
+  4×3. When a game supplies it, selecting/hovering a card whose commands have slots renders that card as a
+  grid panel beside the keyboard (each command's icon + bound key in its real slot), tracking the same
+  selected/hover card as `icon`. `null` for records with no mapped slot; a group with no slotted records
+  shows no panel. Selecting or hovering a command highlights its slot (mirroring the keyboard's key
+  highlight). AoE2 (`positions.json`) and WC3 (`positions.json`) both supply it.
+- **learnSlot (optional)** — `learnSlot(rec) → slot index | null`: a second card shown *beside* the
+  command card, for the same records at a different slot. WC3 uses it for a hero's **learn** sub-card
+  (`Researchbuttonpos`), so a hero shows both its command card and its learn card side by side. When
+  a group has no learn-slotted records (every non-hero), only the command card renders.
+- **setSlot (optional)** — `setSlot(doc, rec, slot, card)`: move a command to a new card slot (grid
+  drag-and-drop); `card` is `'command'` or `'learn'`. When present, the engine makes the card grid draggable (drop on empty = move,
+  drop on filled = swap) and calls this to (a) update the game's live slot map so the panel/overlay
+  repaint immediately and (b) queue the file writeback, applied at save. WC3 supplies it (writes
+  `Buttonpos`); AoE2 omits it, so its card is read-only apart from click-to-rebind.
 - **meta** — display name, file label/accept, load/save help copy, and flags
   (`multiple`, `usesProfileName`, `hasChroniclesToggle`, and optional `defaultsLabel` for the
   "load defaults" button, …). The engine's `applyMeta()` paints this copy into the shell so

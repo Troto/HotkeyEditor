@@ -277,6 +277,7 @@ let chronIds = new Set();    // command ids known to be Chronicles content
 let hiddenIds = new Set();   // command ids always hidden (e.g. the redundant generic "Build")
 let ICONS = {};              // command id -> ability-card icon basename (data/aoe2_icons.json)
 let POSITIONS = {};          // command id -> command-card grid slot 0-14 (data/positions.json)
+let BUILD_POSITIONS = {};    // command id -> villager build-submenu slot 0-14 (data/build_menu_positions.json; a separate grid)
 let DEFAULTS = null;         // bundled default profile {profile,base} as base64 .hkp bytes
 function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
 
@@ -301,7 +302,11 @@ function iconOf(r){
 // (command actions, line-upgrade techs, generic unique-unit slots, and every non-card global)
 // -- the panel only renders for a card whose commands have slots.
 function slotOf(r){
-  const s = r && POSITIONS[r.id];
+  if(!r) return null;
+  // command cards and the villager build submenus are two separate grids, but each command id
+  // belongs to only one of them (no id is in both), so a single lookup across both is unambiguous.
+  let s = POSITIONS[r.id];
+  if(s === undefined) s = BUILD_POSITIONS[r.id];
   return (s === undefined || s === null) ? null : s;
 }
 
@@ -520,6 +525,33 @@ function ctxLabel(ctx){
   return rest||ctx;
 }
 
+// ---- strict column categories (engine's optional groupCategory/groupKey hooks) ----
+// AoE2 has no filter bar; instead the command list is split into whole-column categories by
+// selection layer, read straight from each command's existing conflict-context code
+// (card_data.byId[id][1]) -- no extra data is needed, the code already encodes the layer:
+//   Common     — generic commands available on all/most units (Delete/Stop, stances, formations)
+//   Units      — type-specific unit cards (villager, monk, siege, trade, hybrid, transports…)
+//   Buildings  — building command cards + the villager build menus
+//   Global     — game-wide UI hotkeys (control groups, camera, zoom, select, replay…)
+//   Chronicles — campaign content (only present when the Chronicles toggle is on)
+// Every display group's commands share one layer, so a group never straddles two categories.
+const COMMON_CTX={'U:any':1,'U:military':1,'U:nonsiege':1,'X:autoscout':1};   // generic all/most-unit commands
+function catOf(r){
+  const ctx=recContext(r);
+  if(ctx==='CAMP') return 4;                    // Chronicles / campaign
+  const layer=ctx[0];
+  if(layer==='D'||layer==='B') return 2;        // Buildings (command cards + villager build menus)
+  if(layer==='G'||layer==='R'||layer==='Z') return 3;  // Global UI (+ ungrouped/"Other" catch-all)
+  if(COMMON_CTX[ctx]) return 0;                 // Common: generic commands on all/most units
+  return 1;                                     // Units: type-specific cards (U:type / T:type)
+}
+function pad2(n){ return (n<10?'0':'')+n; }
+// category-major, then alphabetical by group name within the category (engine sorts on this)
+function groupKey(r){ return pad2(catOf(r))+'|'+groupNameOf(r); }
+function groupCategory(r){ return pad2(catOf(r)); }
+const CAT_TITLE={'00':'Common','01':'Units','02':'Buildings','03':'Global','04':'Chronicles'};
+function categoryTitle(id){ return CAT_TITLE[id]||''; }
+
 // ---- file I/O: the engine hands us File objects + an opaque per-game doc ----
 // AoE2's doc is { profile, base, name }: a profile (.hkp, the legacy shared menus) and a
 // Base.hkp (the remappable system) loaded in either order/pick.  load() merges one file
@@ -574,6 +606,7 @@ GAMES.aoe2 = {
     multiple: true,
     usesProfileName: true,        // show the profile-name field (download is <Name>.zip)
     hasChroniclesToggle: true,
+    cardCols: 5, cardRows: 3,     // AoE2 command card geometry for the card-grid panel (5 wide x 3 tall)
     pathHelpTitle: 'Where AoE2:DE hotkeys go (click for details)',
     pathHelp:
       '<p><b>To get started:</b> load the two files for your current hotkey layout/profile.</p>'
@@ -621,9 +654,12 @@ GAMES.aoe2 = {
     hiddenIds = new Set((d.card&&d.card.hidden)||[]);
     ICONS = d.icons || {};
     POSITIONS = d.positions || {};
+    BUILD_POSITIONS = d.build_positions || {};
     DEFAULTS = d.defaults || null;
   },
   fileStatus: fileStatus,        // load-status chips for the toolbar (doc, name) -> html
+  isComplete: function(doc){ return !!(doc && doc.profile && doc.base); },  // need BOTH .hkp files before editing
+
   bindings: buildEntries,        // doc -> the engine's editable rec list
   forEachEntry: forEachEntry,    // iterate raw entries of a doc (used by the layout remap)
   groupOf: groupNameOf,          // display group heading for a rec
@@ -634,6 +670,11 @@ GAMES.aoe2 = {
   slot: slotOf,                  // command-card grid slot (0-14) for the card-grid panel, or null
   baseName: baseName,            // display name for a command id
   ctxLabel: ctxLabel,              // human-readable label for a conflict-context code
+  // strict per-category columns (Common / Units / Buildings / Global / Chronicles), derived
+  // from each command's selection layer -- no filter bar, so recFilters/filters are omitted
+  groupKey: groupKey,            // column/category ordering key (category-major)
+  groupCategory: groupCategory,  // strict-column category id (each category gets its own columns)
+  categoryTitle: categoryTitle,  // title the engine prints atop each column of a category
 };
 
 })();

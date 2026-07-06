@@ -475,6 +475,12 @@ def build():
     except FileNotFoundError:
         print('WARNING: data/positions.json missing; command-card grid panel disabled')
     try:
+        # command id -> villager build-submenu grid slot (a SEPARATE 0-14 grid from the command
+        # cards); optional. Merged with positions at lookup so the build-menu groups get a grid too.
+        data['build_positions'] = json.load(open(os.path.join(_DATA_DIR, 'build_menu_positions.json'), encoding='utf-8'))
+    except FileNotFoundError:
+        print('WARNING: data/build_menu_positions.json missing; villager build-menu grids disabled')
+    try:
         # Bundled default profile (both halves of an AoE2 profile) for the one-click
         # "Load defaults" button.  .hkp is binary (zip/deflate), so base64 it into the
         # json payload; module.js loadDefault decodes + parses both at runtime.

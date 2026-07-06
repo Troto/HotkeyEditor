@@ -71,6 +71,40 @@ overlay (when a command card is selected, each command's icon is shown on the ke
 
 Both are (re)built by the one-off Node script **`gen_wc3_icons.js`** (see *Regenerating*).
 
+### Command-card positions (`positions.json` + `slk data/`)
+
+The **command-card grid panel** needs each command's slot on its unit's in-game 4×3 command card.
+That value is **Blizzard's**, not jcfields': every unit/ability/upgrade profile carries a
+`Buttonpos=X,Y` (and `Researchbuttonpos=`/`Unbuttonpos=` for research and two-state off-states),
+where `X` is the column (0–3) and `Y` the row (0–2). It is **not** in the object data SLKs — that
+field's `slk` source is `"Profile"`, i.e. the `*func.txt` profile files.
+
+- **`slk data/`** — the raw Blizzard game-data tables (`*.slk`) and profile text files
+  (`*func.txt`, `*skin.txt`, `*.txt`) copied out of a Warcraft III install. Vendored so
+  `gen_wc3_positions.py` is reproducible without a game install. (Blizzard content — kept here only
+  as build input; not shipped in `site/`.)
+- **`positions.json`** — `{ b: {code→slot}, r: {…}, u: {…} }`, slot folded row-major
+  (`slot = Y*4 + X`, top-left = 0), keyed by lower-cased code. Built by **`gen_wc3_positions.py`**,
+  which scans `slk data/*func.txt` for the `Buttonpos` lines. Codes whose research/off-state slot
+  equals their active slot are dropped from `r`/`u` (the module falls back to `b`). ~89% of command
+  codes get a slot; the rest (shop items, mercenaries, campaign-only entries) have no fixed
+  `Buttonpos` and simply don't appear in the grid.
+
+### Item categories (`wc3_items.json` + `slk data/itemdata.slk` + `*func.txt`)
+
+Item purchase hotkeys have no shop→item link in the base game data (only the Goblin Merchant's
+fixed `Sellitems=` list; the rest are placed into shops per-map in the World Editor), **and** WC3
+templates every item with the same fields, so most of these purchase sections are boilerplate the
+game never actually uses. So rather than card items to a shop, we tag each by whether its purchase
+hotkey is ever **reachable in a match**, from Blizzard's `itemdata.slk` + the `*func.txt` profiles:
+
+- **`wc3_items.json`** — `code → "melee" | "campaign" | "hidden"`, keyed by lower-cased code, built by
+  **`gen_wc3_items.py`**: `class == "Campaign"` → `campaign`; else **reachable** (in a `Sellitems=`
+  list, has a `Buttonpos` shop slot, or `pickRandom == 1` — the random drop/marketplace pool) →
+  `melee`; else → `hidden` (no shop/pool offers it — a template/unused purchase hotkey). Note
+  `droppable` is **not** used — it's `1` for ~every item (a template default). Same vendored `slk
+  data/` as the positions above, so it's reproducible without a game install.
+
 ## Regenerating
 
 `wc3.json` is static — it only changes if the upstream data does. To refresh it, fetch
@@ -94,6 +128,16 @@ node gen_wc3_icons.js path/to/data.js --download
 which rewrites `wc3_icons.json` from `data.icons.classic.commands` and downloads the referenced
 classic PNGs into `icons/classic/`. Omit `--download` to only rebuild the JSON from a local
 `data.js`. (Also kept out of the Python build for the same reason.)
+
+The **command-card positions** are refreshed by a stdlib Python script that reads the vendored
+`slk data/` profiles (no game install needed, as they're checked in):
+
+```
+python3 gen_wc3_positions.py
+```
+
+which rewrites `positions.json` from the `Buttonpos`/`Researchbuttonpos`/`Unbuttonpos` lines in
+`slk data/*func.txt`. (Kept out of the Python build for the same reason as the others.)
 
 ## MIT License notice (retained per the license terms)
 

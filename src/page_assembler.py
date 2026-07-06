@@ -27,22 +27,29 @@ DATA_VAR = 'window.GAME_DATA'
 MODULE_MARKER = '/* __GAME_MODULE__ */'
 
 
-def assemble(page_path, data, out_path, module_js=None, game=None):
+def assemble(page_path, data, out_path, module_js=None, game=None, games=None):
     """Inline `data` (and, if given, `module_js`) into the page.html shell.
 
-    The data is wrapped as `{ "game": game, "data": data }` so the page knows which
-    registered game module to activate.  Writes a self-contained html and returns the
-    byte length written.  Raises if the shell or a required marker is missing.  The json
-    is compacted and any "</..." is neutralised so an embedded string can't close the
-    <script> tag early; module_js is trusted game code and is injected verbatim (it must
-    not contain a literal "</script>").
+    The data is wrapped as `{ "game": game, "data": data, "games": [...] }` so the page
+    knows which registered game module to activate AND which sibling games exist (to
+    populate the in-page game switcher).  `games`, when None, is auto-discovered from the
+    shell's own directory (page_path lives at the repo root next to games/), so no caller
+    needs to pass it; give an explicit `[(slug, name), ...]` only to override.  Writes a
+    self-contained html and returns the byte length written.  Raises if the shell or a
+    required marker is missing.  The json is compacted and any "</..." is neutralised so an
+    embedded string can't close the <script> tag early; module_js is trusted game code and
+    is injected verbatim (it must not contain a literal "</script>").
     """
     if not os.path.isfile(page_path):
         raise RuntimeError('page shell not found: %s' % page_path)
     page = open(page_path, encoding='utf-8').read()
     if DATA_MARKER not in page:
         raise RuntimeError('data marker not found in %s' % page_path)
-    payload = {'game': game, 'data': data}
+    if games is None:
+        games = [(slug, name) for slug, name, _ in
+                 discover_games(os.path.dirname(os.path.abspath(page_path)))]
+    payload = {'game': game, 'data': data,
+               'games': [{'slug': slug, 'name': name} for slug, name in games]}
     blob = json.dumps(payload, ensure_ascii=False, separators=(',', ':')).replace('</', '<\\/')
     out = page.replace(DATA_MARKER, '%s = %s; /* __GAME_DATA__ */' % (DATA_VAR, blob))
     if module_js is not None:

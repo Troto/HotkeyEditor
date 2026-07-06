@@ -34,6 +34,11 @@ var CMD_RE = /^(GameCommand|MenuCommand|CameraCommand|CtrlGroupCommand|ObserverC
 var CMD_FAMILY = { GameCommand: 'game', MenuCommand: 'menu', CameraCommand: 'camera',
   CtrlGroupCommand: 'ctrl', ObserverCommand: 'observer', ReplayCommand: 'replay' };
 var SECTION_RE = /^\[(.*)\]$/;
+// command-card position lines (X,Y grid coords): active / hero-learn / two-state off-state buttons
+var POS_LINE_RE = /^(Buttonpos|Researchbuttonpos|Unbuttonpos)=\s*(-?\d+)\s*,\s*(-?\d+)/i;
+var POS_FIELD = { buttonpos: 'b', researchbuttonpos: 'r', unbuttonpos: 'u' };
+var POS_NAME = { b: 'Buttonpos', r: 'Researchbuttonpos', u: 'Unbuttonpos' };
+var CARD_COLS = 4;                          // WC3 command card is 4 columns x 3 rows (slot = Y*4 + X)
 
 function bodyOf(line) { return line.charAt(line.length - 1) === '\r' ? line.slice(0, -1) : line; }
 
@@ -50,7 +55,7 @@ function parse(text) {
       continue;
     }
     var sm = SECTION_RE.exec(body);
-    if (sm) { cur = { code: sm[1], lineIndex: i, binds: {}, modifier: null, modLine: -1, twoState: false, cmd: null, comment: pending }; sections.push(cur); pending = ''; continue; }
+    if (sm) { cur = { code: sm[1], lineIndex: i, binds: {}, modifier: null, modLine: -1, twoState: false, cmd: null, comment: pending, posLines: {}, posOrig: {} }; sections.push(cur); pending = ''; continue; }
     if (body.trim() === '') pending = '';                    // a blank line ends a comment block
     if (!cur) continue;
     var bm = BIND_RE.exec(body);
@@ -58,6 +63,13 @@ function parse(text) {
     var mm = MOD_RE.exec(body);
     if (mm) { cur.modifier = mm[1]; cur.modLine = i; continue; }
     if (UNHOTKEYID_RE.test(body)) { cur.twoState = true; continue; }   // off-state is a real, separate button
+    // command-card position lines: capture where each lives + its original slot so the grid drag
+    // can rewrite them in place (and revert to byte-exact if dragged back).  X,Y -> slot Y*4+X.
+    var pm = POS_LINE_RE.exec(body);
+    if (pm) { var pf = POS_FIELD[pm[1].toLowerCase()];
+      if (pf) { cur.posLines[pf] = i; var px = parseInt(pm[2], 10), py = parseInt(pm[3], 10);
+        cur.posOrig[pf] = (px < 0 || py < 0) ? null : (py * CARD_COLS + px); }
+      continue; }
     var cm = CMD_RE.exec(body);
     if (cm && !cur.cmd) cur.cmd = CMD_FAMILY[cm[1]];        // global-command family (if any)
   }
@@ -125,7 +137,9 @@ function modString(ctrl, alt, shift) {
 var DATA = null;            // the raw dataset
 var DEFAULTS = '';          // bundled default CustomKeys.txt text (the "good defaults")
 var NAMESDATA = {};         // code -> name from the SLK tables (data.names), for Miscellaneous labels
+var ITEMCAT = {};           // item code -> 'shop'|'powerup'|'campaign' (data.items, from itemdata.slk)
 var ICONS = {};             // lower-cased command code -> classic icon basename (data.icons.classic)
+var POS = { b: {}, r: {}, u: {} };  // code -> command-card slot (data/positions.json): active / research / off-state
 var CAMPAIGN = {};          // unit key -> 1 for campaign-only units (from index.html Campaign lists)
 var BUILD_TARGET = {};      // unit key -> 1 for build sub-menus (a unit's `build` target, e.g. cmdbuildhuman)
 var UNIT_ORDER = [];        // unit keys, sorted for a sensible grouped list
@@ -136,6 +150,12 @@ var COMMON_LABEL = {        // common-set -> its shared "card" label (shown once
   basic: 'Common — Unit Commands', hero: 'Common — Hero Commands',
   noAttack: 'Common — Non-attacking Commands', tower: 'Common — Tower Commands'
 };
+// Item purchase hotkeys have no shop card in the base game data (see README).  WC3 templates every
+// item with the same fields, so most of these purchase sections are boilerplate the game never uses;
+// gen_wc3_items.py (data.items -> ITEMCAT) tags each item by whether its purchase hotkey is ever
+// reachable in a match ("melee" = in the drop/marketplace pool or on a shop; "campaign" = quest item;
+// "hidden" = ruled out, no shop/pool offers it).  Visible tokens map to a group here.
+var ITEM_LABEL = { melee: 'Neutral Items', campaign: 'Campaign Items' };
 
 var RACE_LABEL = {
   human: 'Human', orc: 'Orc', undead: 'Undead', nightelf: 'Night Elf',
@@ -149,7 +169,9 @@ function setData(d) {
   DATA = (d && d.units) ? d : null;
   DEFAULTS = (d && d.defaults) || '';
   NAMESDATA = (d && d.names) || {};
+  ITEMCAT = (d && d.items) || {};
   ICONS = (d && d.icons && d.icons.classic) || {};
+  POS = (d && d.positions) || { b: {}, r: {}, u: {} };
   CAMPAIGN = {}; ((d && d.campaign) || []).forEach(function (c) { CAMPAIGN[c] = 1; });
   BUILD_TARGET = {};
   UNIT_ORDER = []; UNIT_CARD = {}; UNIT_LABEL = {}; COMMON_ORDER = [];
@@ -169,11 +191,15 @@ function setData(d) {
     u.commands.forEach(function (c) { card.set(c[0], c[1]); });
     UNIT_CARD[key] = Array.from(card.entries());
     // The race filter already scopes the list to a race, so a "Human — " prefix on every Human
-    // card is noise.  Drop it for the four main (natively selectable) races; keep it for folded
-    // campaign races (Blood Elf, Draenei, Demon, Naga) that share a main race's filter, where it
-    // disambiguates (e.g. "Blood Elf — Dragonhawk Rider" under the Human filter).
-    UNIT_LABEL[key] = (MAIN_RACES[u.race] ? '' : (RACE_LABEL[u.race] || u.race || 'Neutral') + ' — ')
-      + (u.name || key);
+    // card is noise.  Drop it for the four main (natively selectable) races.  Genuinely neutral
+    // units get a trailing "(Neutral)" tag instead of a "Neutral — " prefix, so they read as the
+    // unit name and sort/interleave alphabetically by it.  Folded campaign races (Blood Elf,
+    // Draenei, Demon, Naga) keep a "Race — " prefix, which disambiguates them under the main
+    // race's filter (e.g. "Blood Elf — Dragonhawk Rider" under the Human filter).
+    var base = u.name || key;
+    UNIT_LABEL[key] = MAIN_RACES[u.race] ? base
+      : foldRace(u.race) === 'neutral' ? base + ' (Neutral)'
+      : (RACE_LABEL[u.race] || u.race) + ' — ' + base;
     UNIT_ORDER.push(key);
   });
   UNIT_ORDER.sort(function (a, b) {
@@ -265,6 +291,19 @@ function saveDoc(doc, _name) {
       ops.push({ pos: modInsertPos(doc.ck, sec), text: 'Modifier=' + str + crOf(doc.ck.lines[sec.lineIndex]) });
     }
   });
+  // 2b. Command-card position (Buttonpos) edits from the grid drag.  Rewrite in place when the
+  //     field's line already exists; otherwise queue an insert with the modifier ops so all the
+  //     line-adds are spliced together high->low (indices stay valid).  Sections never dragged
+  //     have no _posEdit, so they stay byte-exact.
+  doc.ck.sections.forEach(function (sec) {
+    if (!sec._posEdit) return;
+    Object.keys(sec._posEdit).forEach(function (field) {
+      var slot = sec._posEdit[field];
+      var val = (slot % CARD_COLS) + ',' + Math.floor(slot / CARD_COLS);
+      if (sec.posLines[field] != null) setValue(doc.ck, sec.posLines[field], POS_NAME[field], val);
+      else ops.push({ pos: modInsertPos(doc.ck, sec), text: POS_NAME[field] + '=' + val + crOf(doc.ck.lines[sec.lineIndex]) });
+    });
+  });
   ops.sort(function (a, b) { return b.pos - a.pos; });      // high->low so earlier indices stay valid
   ops.forEach(function (op) {
     if (op.del) doc.ck.lines.splice(op.pos, 1);
@@ -291,9 +330,16 @@ function bindings(doc) {
         group: rawGroup(b.key), hidden: false, chron: false };
     });
   }
-  var recs = [], used = {};
+  var recs = [], used = {}, onCard = {};
   // mark all of a section's bind lines used (the Researchhotkey is mirrored, never its own row)
   function useSection(slot) { ['Hotkey', 'Unhotkey', 'Researchhotkey'].forEach(function (k) { if (slot[k]) used[slot[k].id] = 1; }); }
+  // Skip a binding already emitted onto this same card.  Units that share a display name fold into
+  // one group -- most often a building and its `_campaign` twin (e.g. halt / halt_campaign, both
+  // "Altar of Kings") -- and every command they share is literally the same CustomKeys line, so
+  // without this the generic building commands (Set Rally Point = cmdrally, Cancel = cmdcancelbuild)
+  // would show twice on the card.  Keyed by group + binding id, so the same line still appears on
+  // genuinely different cards, just once per card.
+  function dup(group, id) { var k = group + '\x00' + id; if (onCard[k]) return true; onCard[k] = 1; return false; }
   function emitCommand(unit, set, group, code, name) {
     var lc = code.toLowerCase();
     var slot = doc.byCode[lc];
@@ -301,6 +347,7 @@ function bindings(doc) {
     var primary = slot.Hotkey || slot.Researchhotkey;
     if (!primary) return;
     useSection(slot);
+    if (dup(group, primary.id)) return;                      // same binding already on this card
     // The game's own strings are the source of truth for the command name (NAMESDATA); the
     // jcfields card label is only a fallback for the few codes the game files don't name.
     name = NAMESDATA[lc] || name;
@@ -325,16 +372,30 @@ function bindings(doc) {
     UNIT_CARD[unit].forEach(function (c) { emitCommand(unit, null, UNIT_LABEL[unit], c[0], c[1]); });
   });
   // binds not on any unit card: global commands (control groups, camera, menu, item/hero slots,
-  // observer/replay) get their own named groups; genuine unrecognised abilities fall to "Other".
+  // observer/replay) get their own named groups; item-purchase hotkeys are grouped by kind
+  // (data.items); a few stale duplicate rawcodes are hidden; the genuine remainder falls to
+  // "Miscellaneous" (neutral build/summon commands with no ownership in the vendored data).
   doc.binds.forEach(function (b) {
     if (used[b.id]) return;
+    var suffix = b.key === 'Hotkey' ? '' : KEY_SUFFIX[b.key];
+    // A verified-stale duplicate rawcode (checked first, since a couple are also item codes):
+    // kept in the file, dropped from the list (hidden:true) so the live carded copy is what's shown.
+    if (HIDE[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
     var g = GLOBAL[b.sec.cmd];
-    if (g) recs.push({ e: b, id: b.id, unit: null, set: g.set, ch: channelOf(b.key),
-      name: (GLOBAL_NAMES[b.codeLc] || nameOf(b)) + (b.key === 'Hotkey' ? '' : KEY_SUFFIX[b.key]),
-      group: g.group, hidden: false, chron: false });
-    else recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + (b.key === 'Hotkey' ? '' : KEY_SUFFIX[b.key]),
-      group: 'Miscellaneous', hidden: false, chron: false });
+    if (g) { recs.push({ e: b, id: b.id, unit: null, set: g.set, ch: channelOf(b.key),
+      name: (GLOBAL_NAMES[b.codeLc] || nameOf(b)) + suffix,
+      group: g.group, hidden: false, chron: false }); return; }
+    var it = ITEMCAT[b.codeLc];
+    // 'hidden' item: a templated purchase hotkey no shop or drop/marketplace pool ever offers, so
+    // it can't fire in a match -- drop it from the list (still round-trips on save, like HIDE above).
+    if (it === 'hidden') { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+    // 'melee' (neutral drop/marketplace/shop pool) or 'campaign' -> its own column, not Miscellaneous
+    if (it) { recs.push({ e: b, id: b.id, unit: null, set: null, item: it, ch: channelOf(b.key),
+      name: nameOf(b) + suffix, group: ITEM_LABEL[it], hidden: false, chron: false }); return; }
+    recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: false, chron: false });
   });
   return recs;
 }
@@ -350,12 +411,71 @@ function iconOf(rec) {
   return base ? 'icons/classic/' + base + '.png' : null;
 }
 
+// A record's slot (0-11) on its unit's in-game 4x3 command card, for the card-grid panel; null when
+// this command has no fixed card slot (shop items / mercenaries are laid out from the building's
+// sell list at runtime, campaign-only bits aren't mapped) -- the panel just omits it.  A code's slot
+// is a property of the ability/unit/upgrade itself (same button wherever it appears), so it doesn't
+// depend on which card is shown.
+//
+// Always use the command's OWN command-card button (`Buttonpos`, POS.b) -- that's where every
+// ability/upgrade sits together in-game (e.g. a Paladin's Holy Light / Devotion Aura / Resurrection
+// all on the bottom row).  Deliberately NOT `Researchbuttonpos` (POS.r): that's the hero *learn*
+// sub-card (a different card, top row), so a passive aura -- whose only binding is its learn key
+// (Researchhotkey) -- must still show at its command-card Buttonpos next to the active abilities,
+// not at its learn-button slot.  The Unhotkey "— Off" row of a two-state toggle uses the off-state
+// button (POS.u).  Fall back to any known slot (a code with only a learn position -- none today).
+function slotOf(rec) {
+  var code = rec && rec.e && rec.e.codeLc;
+  if (!code) return null;
+  var s = (rec.e.key === 'Unhotkey') ? POS.u[code] : POS.b[code];
+  if (s == null) s = (POS.b[code] != null ? POS.b[code] : POS.r[code]);   // off-state / learn-only fallback
+  return s == null ? null : s;
+}
+
+// A hero ability's slot on the separate **learn** sub-card (`Researchbuttonpos`, POS.r) -- the
+// engine draws this as a second grid beside the command card for heroes.  null when the command
+// has no learn button (every non-hero card), so no learn grid shows.
+function learnSlotOf(rec) {
+  var code = rec && rec.e && rec.e.codeLc;
+  var s = code ? POS.r[code] : null;
+  return s == null ? null : s;
+}
+
+// Move a command to a new card slot (grid drag-and-drop).  `card` is 'command' (the ability's own
+// Buttonpos, or Unbuttonpos for an off-state) or 'learn' (its Researchbuttonpos learn button).
+// Updates the live slot map so the panel repaints at once, and queues the writeback on the
+// command's section (applied by saveDoc).  Dragging back to the file-original slot drops the edit.
+function setSlotDoc(doc, rec, slot, card) {
+  var e = rec && rec.e; if (!e || !e.codeLc) return;
+  var code = e.codeLc;
+  var field = (card === 'learn') ? 'r' : (e.key === 'Unhotkey') ? 'u' : 'b';
+  POS[field][code] = slot;                          // live update -> card panel + keyboard overlay
+  var sec = e.sec; if (!sec) return;
+  sec._posEdit = sec._posEdit || {};
+  if (sec.posOrig[field] != null && sec.posOrig[field] === slot) delete sec._posEdit[field];  // == file original
+  else sec._posEdit[field] = slot;
+}
+
 // Every command name comes from the game's own strings files (NAMESDATA = data.names, the real
 // localized display names -- see data/gen_wc3_names.py): unit-card commands, common commands,
 // globals, and the Miscellaneous tail all resolve through it, so the labels match what the game
 // shows.  NAMES here is a small manual-override map for any edge case the game data gets wrong;
-// empty for now.  Nothing is hidden.
+// empty for now.
 var NAMES = {};
+
+// Orphan/stale ability rawcodes: each is a *second* rawcode for an ability that's already carded
+// on a live melee unit under a different code, and is itself used by NO unit in the dataset (verified
+// against every unit's command list -- the carded twin is the one the game actually binds).  They
+// only clutter the file's tail, so we drop them from the list (the section still round-trips on save,
+// untouched; editing the carded copy is what changes the in-game key).  Value = the live carded code
+// kept, for the record.  If the dataset ever changes, re-verify before trusting these.
+var HIDE = {
+  aams: 'aam2', apos: 'aps2', aua2: 'auan', anic: 'ania',   // Anti-magic Shell / Possession / Animate Dead / Incinerate
+  ugrm: 'ugar', edcm: 'edoc', edtm: 'edot',                 // Train Gargoyle / Druid of the Claw / Druid of the Talon
+  egol: 'aent', aroo: 'aro1', aenc: 'aloa',                 // Entangle Gold Mine / Root / Load
+  nalm: 'nalc', nal2: 'nalc', nal3: 'nalc', nrob: 'ntin',   // Summon Alchemist (x3) / Summon Tinker
+  ofr2: 'ofir', olig: 'oli2'                                // Orb of Fire / Orb of Lightning (shop-item dupes)
+};
 
 // Global-command families -> a display group + conflict scope + which column category they land in.
 // The melee-relevant globals share one 'global' scope (so a key reused across them flags) and sit
@@ -465,6 +585,7 @@ function recFilters(r) {
 // separately in catOf and land with Buildings.
 var CAT_RANK = { hero: 1, unit: 2, summon: 2, item: 2, noAttack: 2, building: 3, tower: 3, other: 2 };
 var CAT_CAMPAIGN = 4;   // Miscellaneous shares CAT_CAMPAIGN (the melee campaign column group)
+var CAT_ITEMS = 5;      // shop / powerup item-purchase hotkeys (campaign items go to CAT_CAMPAIGN)
 // set-scope -> column category. Common cards, the melee globals, and the spectator scope
 // (observer/replay) all share the first (common) category so the global hotkeys stay in one
 // column instead of stranding observer/replay in a sparse column of their own. Spectator keeps
@@ -472,6 +593,7 @@ var CAT_CAMPAIGN = 4;   // Miscellaneous shares CAT_CAMPAIGN (the melee campaign
 var SET_CAT = { basic: 0, hero: 0, noAttack: 0, tower: 0, global: 0, spectator: 0 };
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function catOf(r) {
+  if (r.item) return r.item === 'campaign' ? CAT_CAMPAIGN : CAT_ITEMS;  // campaign items join the campaign column
   if (r.set) return SET_CAT[r.set] != null ? SET_CAT[r.set] : 0;
   if (r.unit) {
     if (CAMPAIGN[r.unit]) return CAT_CAMPAIGN;               // campaign-only unit -> campaign column
@@ -495,7 +617,7 @@ function groupKey(r) {
 // leading field of groupKey so categories stay contiguous in the sorted order.
 function groupCategory(r) { return pad2(catOf(r)); }
 // human-readable title the engine prints atop each column, keyed by the groupCategory id
-var CAT_TITLE = { '00': 'Common', '01': 'Heroes', '02': 'Units', '03': 'Buildings', '04': 'Campaign' };
+var CAT_TITLE = { '00': 'Common', '01': 'Heroes', '02': 'Units', '03': 'Buildings', '04': 'Campaign', '05': 'Items' };
 function categoryTitle(id) { return CAT_TITLE[id] || ''; }
 
 function fileStatus(doc) {
@@ -515,6 +637,7 @@ GAMES.warcraft3 = {
     multiple: false,
     usesProfileName: false,       // the download is always CustomKeys.txt
     hasChroniclesToggle: false,
+    cardCols: 4, cardRows: 3,     // WC3 command card geometry for the card-grid panel (4 wide x 3 tall)
     pathHelpTitle: 'Where Warcraft III custom hotkeys go (click for details)',
     pathHelp:
       '<p><b>To get started:</b> load your <code>CustomKeys.txt</code>.</p>'
@@ -540,6 +663,9 @@ GAMES.warcraft3 = {
   classify: classify,
   recName: recName,
   icon: iconOf,              // ability-card icon overlaid on the keyboard when a card is selected
+  slot: slotOf,              // command-card grid slot (0-11 on the 4x3 card) for the card-grid panel, or null
+  learnSlot: learnSlotOf,    // hero learn sub-card slot (Researchbuttonpos) -> a 2nd grid beside the command card
+  setSlot: setSlotDoc,       // move a command to a new card slot (grid drag) -> Buttonpos writeback
   baseName: function (r) { return r && r.name ? r.name : ''; },
   ctxLabel: ctxLabel,
   filters: FILTERS,          // race filter buttons (engine shows them; AoE2 omits -> no bar)

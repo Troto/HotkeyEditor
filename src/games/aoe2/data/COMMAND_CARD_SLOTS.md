@@ -1,19 +1,18 @@
-# Command-card slot map (command id → grid slot)
+# Command-card & build-menu slot map (command id → grid slot)
 
-Pairs each hotkey **command id** (the numeric id stored in the `.hkp`, and the key of
-`card_data.json`/`civ_data.json`/`positions.json`) to its **slot in that building’s
-command-card grid**. Readable companion to the machine form `positions.json` = `{ "<id>": slot }`.
+Pairs each hotkey **command id** to its **grid slot** (0–14; `row = slot//5`, `col = slot%5`,
+top-left = 0). Readable companion to two machine files:
+- **`positions.json`** — command-card slots (train/research + command actions).
+- **`build_menu_positions.json`** — villager **build-submenu** slots (a *separate* grid).
 
-- Slot is **0–14** in a 5-wide grid: `row = slot // 5`, `col = slot % 5` (top-left = 0;
-  matches `commandpanel.json`’s `Button{slot}`).
-- **Train-unit / research-tech** buttons come from the `.dat` (`button_id - 1`).
-- **Command actions** (gather point, ungarrison, town bell, more items, back-to-work) come
-  from `buttons.json` `sequence_id` (already 0-based; verified against the in-game Town Center).
-- Multiple commands can share a slot: civ-replacement units (same slot, different civ) and
-  context-shared action buttons (e.g. More Items / Town Bell only one shows at a time).
-- **Still unmapped** (see end): gate + fish-trap actions (not in `buttons.json`), line-upgrade
-  techs whose hotkey name is a generic `Tech: X-line` label, generic "unique unit/warship"
-  placeholder slots, age-up, villager.
+Multiple commands can share a slot — civ-replacement units/buildings occupy the same slot
+(e.g. Settlement/Mill, Feitoria/Caravanserai/Port), and context-shared action buttons too.
+
+---
+
+# Command cards
+Sources: unit/tech buttons from the `.dat` (`button_id - 1`); command actions from
+`buttons.json` `sequence_id`.
 
 ## All production buildings (gather point)
 
@@ -230,7 +229,57 @@ command-card grid**. Readable companion to the machine form `positions.json` = `
 | 12 | 2,2 | `19343` | Tech: Shipwright |
 | 13 | 2,3 | `19357` | Tech: Siphons, Incendiaries |
 
-## Building-card commands still with no slot
+---
+
+# Villager build submenus (a separate grid from the command cards)
+Source: each building’s `.dat` `creatable.train_locations` → the "Builder" unit (118)
+`button_id - 1`. The page (Economic / Military) comes from the `B:eco` / `B:mil` context.
+
+## Build Economic Buildings  &nbsp;`(B:eco)`
+
+| Slot | Row,Col | ID | Command |
+|-----:|:-------:|----|---------|
+| 0 | 0,0 | `19213` | House |
+| 1 | 0,1 | `19163` | Settlement |
+| 1 | 0,1 | `19236` | Mill |
+| 2 | 0,2 | `19288` | Mining Camp |
+| 3 | 0,3 | `19158` | Mule Cart |
+| 3 | 0,3 | `19283` | Lumber Camp |
+| 4 | 0,4 | `19067` | Dock |
+| 5 | 1,0 | `19200` | Farm, Pasture |
+| 6 | 1,1 | `19063` | Blacksmith |
+| 7 | 1,2 | `19237` | Market |
+| 8 | 1,3 | `19065` | Monastery |
+| 9 | 1,4 | `19208` | University |
+| 10 | 2,0 | `19238` | Town Center |
+| 11 | 2,1 | `19209` | Wonder |
+| 12 | 2,2 | `19075` | Feitoria |
+| 12 | 2,2 | `19148` | Caravanserai |
+| 12 | 2,2 | `419007` | Port |
+
+## Build Military Buildings  &nbsp;`(B:mil)`
+
+| Slot | Row,Col | ID | Command |
+|-----:|:-------:|----|---------|
+| 0 | 0,0 | `19064` | Barracks |
+| 1 | 0,1 | `19062` | Archery Range |
+| 2 | 0,2 | `19206` | Stable |
+| 3 | 0,3 | `19205` | Siege Workshop |
+| 4 | 0,4 | `19138` | Donjon |
+| 4 | 0,4 | `19329` | Krepost |
+| 4 | 0,4 | `419008` | Shipyard |
+| 5 | 1,0 | `19203` | Outpost |
+| 6 | 1,1 | `19210` | Palisade Wall |
+| 7 | 1,2 | `19211` | Stone Wall |
+| 9 | 1,4 | `19204` | Bombard Tower |
+| 10 | 2,0 | `19264` | Gate |
+| 11 | 2,1 | `19212` | Palisade Gate |
+| 12 | 2,2 | `19066` | Castle |
+
+---
+
+# Command-card commands still with no slot
+(gate + fish-trap actions, line-upgrade `Tech: X-line` techs, generic unique-unit slots)
 
 - **Archery Range:** `19459` Tech: Elite, Imperial Skirmisher, `19463` Tech: Elite Genitour, `419141` Cycle Recruitment Doctrine (Archery Range)
 - **Barracks:** `19125` Infantry Unique Units, `19166` Tech: Elite Ibirapema, Temple Guard, `19451` Tech: Swordsmen, Champi Upgrades, `419140` Cycle Recruitment Doctrine (Barracks)
