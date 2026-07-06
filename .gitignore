@@ -71,3 +71,7 @@ yarn-error.log*
 .DS_Store
 Thumbs.db
 desktop.ini
+
+# Game Data Folders
+src/games/Starcraft2/data/SC2 data
+src/games/Warcraft3/data/slk data
