@@ -38,6 +38,8 @@ def build():
     data_path = os.path.join(_HERE, 'data', 'wc3.json')
     names_path = os.path.join(_HERE, 'data', 'wc3_names.json')
     items_path = os.path.join(_HERE, 'data', 'wc3_items.json')
+    misc_path = os.path.join(_HERE, 'data', 'wc3_misc.json')
+    cards_path = os.path.join(_HERE, 'data', 'wc3_cards.json')
     icons_path = os.path.join(_HERE, 'data', 'wc3_icons.json')
     positions_path = os.path.join(_HERE, 'data', 'positions.json')
     defaults_path = os.path.join(_HERE, 'HotkeyFiles', 'Sensible Reforged CustomKeys.txt')
@@ -60,6 +62,17 @@ def build():
     except FileNotFoundError:
         print('WARNING: %s missing; item-purchase hotkeys stay in Miscellaneous'
               % os.path.basename(items_path))
+    try:
+        with open(misc_path, encoding='utf-8') as f:
+            data['misc'] = json.load(f)        # unit code -> 'unbuilt' (dead build/train hotkey; gen_wc3_misc.py)
+    except FileNotFoundError:
+        print('WARNING: %s missing; unbuildable-building hotkeys stay in Miscellaneous'
+              % os.path.basename(misc_path))
+    try:
+        with open(cards_path, encoding='utf-8') as f:
+            data['cards'] = json.load(f)       # unit code -> [[cmd,name]] compiled from source SLK/func (gen_wc3_cards.py)
+    except FileNotFoundError:
+        print('WARNING: %s missing; unit cards fall back to the jcfields dataset' % os.path.basename(cards_path))
     try:
         with open(icons_path, encoding='utf-8') as f:
             data['icons'] = json.load(f)       # { classic: code -> icon basename } for the card overlay

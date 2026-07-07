@@ -29,9 +29,11 @@ generic engine, the build pipeline, and how a game module plugs in.
   - `civ_data.json` — `{civCount, idToCivs:{id:[civs]}, units:[ids]}` (per-civ availability, keyed by id).
 - **`data/aoe2_icons.json`** — `{command id → icon basename}` for the on-keyboard **ability-card icon
   overlay** (see below). **Not** built by `--regen`; produced by **`data/gen_aoe2_icons.py`**, which
-  matches the bundled `data/icons/*.png` to commands **by normalised name** (a command's display name
-  usually contains the unit/building/tech noun the icon is named for). Inlined into the build; the
-  module's `iconOf` turns a rec's id into `icons/<basename>.png`.
+  reads a **game install** (like `--regen`): it builds an authoritative *canonical name → official
+  icon* table from the game's `CivTechTrees/*.json` (each unit/building/tech node's `Name` +
+  `Picture Index`), extracts the referenced icon textures to `data/icons/`, and matches each command
+  to a node **by normalised name** (the command's display name contains the unit/building/tech noun).
+  Inlined into the build; the module's `iconOf` turns a rec's id into `icons/<basename>.png`.
 - **`data/positions.json`** — `{command id → grid slot}` (slot `0–14` in a 5-wide card; `row = slot//5`,
   `col = slot%5`) for the **command-card grid panel** (see below). Covers the train-unit/research-tech
   buttons plus common command actions (gather point, town bell, back-to-work, ungarrison, More Items) —
@@ -40,11 +42,14 @@ generic engine, the build pipeline, and how a game module plugs in.
   exposes it as `GAME.slot(rec)`. **`data/COMMAND_CARD_SLOTS.md`** is its human-readable companion (id↔slot
   per card, plus the tail list of still-unmapped commands: gate/fish-trap actions, generic
   line-upgrade/unique-unit slots, age-up, villager).
-- **`data/icons/*.png`** — the bundled AoE2 UI icons (units / buildings / techs / heroes), named
-  wiki-style (`Barracks_aoe2DE.png`, `Camelrider_aoe2DE.png`, `BallisticsDE.png`). The build **copies
+- **`data/icons/*.png`** — the AoE2:DE command icons, extracted from the game's own icon textures
+  (`widgetui/textures/ingame/{buildings,units,tech}`, uncompressed RGBA / DXT1 / DXT5 DDS) by
+  `gen_aoe2_icons.py` and named by the icon's canonical node name (`Barracks.png`, `Villager.png`,
+  `Forging.png`), downscaled to 128px. Only icons a command references are kept. The build **copies
   this folder next to the page** as `site/aoe2/icons/` (too many/large to inline). Not every command
-  has one (utility, control-group, and campaign/scenario commands mostly don't) — unmatched commands
-  just show no icon. Game UI assets bundled for display; see **Provenance / licensing**.
+  has one (utility, control-group, hero-/military-selector, and campaign/scenario commands mostly
+  don't) — unmatched commands just show no icon. Game UI assets bundled for display; see
+  **Provenance / licensing**.
 - **`HotkeyFiles/`** — the bundled default profile, in the game's own on-disk structure:
   `DefaultHotkeys.hkp` (shared menus) + `DefaultHotkeys/Base.hkp` (remappable system).
   `--build` base64-encodes both into the page (`.hkp` is binary) for the one-click
@@ -56,11 +61,12 @@ generic engine, the build pipeline, and how a game module plugs in.
   (also refreshes the `site/index.html` launcher).
 - **Regen data**: `python3 games/aoe2/game_module_generator.py --regen` — needs an AoE2:DE
   install (`AOE2_STRINGS` / `AOE2_HOTKEYS`); **not runnable without one** (e.g. in a container).
-- **Rebuild the icon map**: `python3 games/aoe2/data/gen_aoe2_icons.py` — re-matches
-  `data/icons/*.png` to command ids → `data/aoe2_icons.json` (stdlib; no game install). Rerun after
-  adding/removing icons; pin or fix matches via its `OVERRIDES` (by id) / `NAME_OVERRIDES`
-  (by command name — used for genuine misses like Villager/Tower/Age Up and one representative
-  icon per Blacksmith/eco upgrade line).
+- **Rebuild the icon map + icons**: `AOE2_INSTALL=/path/to/AoE2DE python3 games/aoe2/data/gen_aoe2_icons.py`
+  — re-extracts the official icons and re-matches them to command ids → `data/aoe2_icons.json` +
+  `data/icons/*.png` (stdlib; **needs a game install**, like `--regen`). The committed outputs mean
+  the app build/runtime never need the install. Pin or fix matches via its `OVERRIDES` (by id) /
+  `NAME_OVERRIDES` (by command name → canonical node name — used for the selection-group commands
+  like idle villager/trade cart and one representative icon per Blacksmith/eco upgrade line).
 - **`.hkp` round-trip check**: `python3 games/aoe2/hkp_parser.py "<file>.hkp"`.
 - **Dvorak CLI**: `python3 games/aoe2/dvorak_convert.py`.
 - **Preview**: build, then `python3 -m http.server 8765` and open
@@ -117,6 +123,19 @@ are read at runtime** — they're build-time inputs.
   Buildings, …). `groupNameOf(r)` in the page.
 - **context code** = the *conflict scope* — when a command is actually active in-game.
   `recContext(r)`.
+
+### Building bundle groups
+Two extra convenience groups — **All Eco Buildings Bundle** / **All Military Buildings Bundle** —
+gather, per building, its **Build** card plus its related **Go to X** / **Select all X** commands, so
+all of a building's binds are visible and editable at once (and can be stacked on a key with different
+modifiers, then moved together on the keyboard). They **reuse the same rec objects** via the engine's
+`GAME.extraGroups` — the originals stay in their normal groups and edit in sync — and via `GAME.groupMeta`
+they sit at the top of the **Buildings** column category and render no card-grid panel (a bundle isn't one
+building's card). Membership is **derived every load** by `buildBundles()` (not a hand id-list, which would
+go stale on a patch — the same lesson as the civ data): the Build-menu commands carry ctx `B:eco`/`B:mil`
+(that's the bundle + the building noun), and each `Go to`/`Select all` global is name-matched to a building
+(with one alias, Wonder ↔ "Wonder or Monument"/"…and Monuments"). Every build card is included, even
+build-only ones with no counterpart (House, Farm, Walls, Gates, Cancel, More Buildings, …).
 
 **Context codes:**
 - `G` — always-active global (Select-all, Go-To, Control Groups, Camera/Scroll, Zoom, Game/Chat).
@@ -232,12 +251,17 @@ Selecting a command card (a group heading) — or **hovering** a command row / a
 👁 button — overlays each of that group's commands' unit/building/tech icons on the keys they're bound
 to. This is the engine's generic optional `GAME.icon(rec)` hook (same feature WC3 uses); AoE2
 implements it via `iconOf`, looking up `aoe2_icons.json` (command id → icon) and returning a
-page-relative `icons/<basename>.png`. Commands with no matching icon (most utility / control-group /
-campaign commands) simply show none. The matching is name-based and best-effort — see
-`data/gen_aoe2_icons.py` (rerun it, or edit its `OVERRIDES` / `NAME_OVERRIDES`, to change matches).
-The icon set was pruned to the ones actually shown (133 icons, 176 commands mapped): civ emblems,
-gaia, campaign heroes, civ unique units, and redundant unit/tech upgrade tiers were removed, keeping
-one icon per upgrade line.
+page-relative `icons/<basename>.png`. Commands with no matching icon (control-group / scroll / zoom /
+menu globals, and the pure-UI stance/formation buttons) simply show none. The icons are the game's
+own — unit/building/tech icons keyed by canonical node name, plus **command-action** icons from the
+`actions/` atlas (`ACTION_OVERRIDES`, a hand-map since no data file links a hotkey command to an
+action-icon index). See `data/gen_aoe2_icons.py` (rerun against an install, or edit its `OVERRIDES` /
+`NAME_OVERRIDES` / `ACTION_OVERRIDES`). Currently **~303 commands mapped, ~196 icons** (15 via the
+action atlas). Select-all / Go-to building commands each use their building's icon; selection-group
+commands that name no single unit use a representative one (idle villager → Villager, trade carts →
+Trade Cart, wonders → Wonder); campaign `Scenario N:` / `Alexander's Army:` cards resolve to the
+underlying unit. The action-atlas entries are visually identified — some (buy/sell arrow direction,
+gate rotation) are best-effort and flagged in `ACTION_OVERRIDES` comments.
 
 ## Command-card grid panel
 Selecting (or hovering) a **building** command card also renders that building's in-game **5×3 command
@@ -285,6 +309,6 @@ The `hkp_parser` logic derives from [`crimsoncantab/aok-hotkeys`](https://github
 whose LICENSE is **public domain** → no obligation; a courtesy credit comment is kept in
 `hkp_parser.py`. No `LICENSE`/`NOTICE` file is required.
 
-The `data/icons/*.png` are Age of Empires II UI icons (Microsoft / Forgotten Empires game assets,
-wiki-sourced), bundled for display in this fan tool. `gen_aoe2_icons.py` only reads their filenames
-to build the name→id match; the images themselves are the game's, used here for identification.
+The `data/icons/*.png` are Age of Empires II UI icons (Microsoft / Forgotten Empires game assets),
+extracted from the game's own icon textures by `gen_aoe2_icons.py` and bundled for display in this
+fan tool for identification.

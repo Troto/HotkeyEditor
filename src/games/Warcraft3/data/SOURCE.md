@@ -105,6 +105,56 @@ hotkey is ever **reachable in a match**, from Blizzard's `itemdata.slk` + the `*
   `droppable` is **not** used — it's `1` for ~every item (a template default). Same vendored `slk
   data/` as the positions above, so it's reproducible without a game install.
 
+### Unbuildable units (`wc3_misc.json` + `slk data/unitdata.slk` + `abilitydata.slk` + `*unitfunc.txt`)
+
+The same templating story as items, one level up: WC3 gives **every** building/unit a build/train
+command button (a `Buttonpos` + a `[code]` Hotkey section), but a family of neutral buildings — the
+Mercenary Camps (one rawcode per tileset), Dragon Roosts, Goblin Laboratory/Merchant/Shipyard,
+Tavern — is only ever *placed in the World Editor* (they're in the random neutral-building pool,
+`nbrandom=1`), never built by a unit, so their "Build X" hotkey never fires in a match.
+
+- **`wc3_misc.json`** — `code → "unbuilt"`, keyed by lower-cased code, built by **`gen_wc3_misc.py`**:
+  a unit is `unbuilt` iff a **shown** command-card button never **produces** it — it's in **no**
+  *browsable* builder / production / shop list (`Builds`/`Trains`/`Sellunits`/`Sellitems` of a `shown`
+  unit, across the `*unitfunc.txt` profiles; a producer that isn't itself browsable, e.g. a campaign-
+  only Dreadlord training `nbal`/`nfel`, doesn't count). That covers the map-placed neutral buildings,
+  units that only appear via an ability (summoned/morphed/hired: Doom Guard, Clockwerk Goblin,
+  Destroyer form, …), **and** units produced only by an unshown/campaign unit — for those the
+  *summoning ability's* hotkey is what fires, not the unit's train button, so being ability-referenced
+  in `abilitydata.slk` does **not** rescue the unit (it only means it appears in play, not that its
+  button is clicked). The module drops `unbuilt` sections from the list (`hidden:true`; still
+  round-trips on save); the unit's own **abilities** card normally and are unaffected. The
+  unit analogues of an item's `class`/`pickRandom` — `unitClass`/`nbrandom`/`campaign` (unitui.slk,
+  unitbalance.slk) — only mark the *building* as placed on maps, not the build *command* as issued, so
+  they're **not** the hide signal; producibility is. Same vendored `slk data/`, reproducible without a
+  game install.
+
+### Command cards (`wc3_cards.json` + `slk data/` + `positions.json`)
+
+Each unit's command card is compiled straight from Blizzard's data by **`gen_wc3_cards.py`**, so the
+editor's cards match what the game actually builds — jcfields' hand-curated `commands` (in `wc3.json`)
+is kept only as a printed cross-check. A card = the unit's abilities (`unitabilities.slk` abilList +
+heroAbilList, **unioned with `unitskin.txt`'s `abilSkinList`**, filtered to codes with a real
+command-card button) + its production lists from the `*unitfunc.txt` profiles
+(`Trains`/`Researches`/`Upgrade`/`Revive`/`Sellunits`/`Sellitems`; `Builds` is the worker's separate
+Build sub-menu), ordered by `Buttonpos` slot (`positions.json`), then **deduped by ability name**.
+
+- **`abilSkinList` (unitskin.txt)** is the Reforged skin ability list, more current than the older
+  `abilList` — it's the one that carries Call to Arms (`amic`) on the base Town Hall, Purge on the
+  Shaman, Possession/Anti-magic Shell on the Banshee, Shadow Strike on the Arachnathid. We union it in
+  (nothing dropped). Because WC3 has several rawcodes per ability (Abolish Magic `acdm`/`acd2`, Bash
+  `anbh`/`acbh`), a card is deduped by **display name** so the ability appears once.
+
+- **Alternate forms:** when a unit has a *morph* ability, that form's abilities are unioned in and
+  tagged with the alt-form unit code (a third element on the entry). Morph vs summon is told apart by
+  self-reference in the ability's `DataA*`/`UnitID*` fields: a morph references the caster (a two-way
+  transform), a summon only the spawned unit. So the Goblin Tinker regains Robo-Goblin's *Demolish*
+  but the Archmage does **not** inherit the Water Elemental's abilities.
+- **Why source, not jcfields:** jcfields has errors (labels the Obsidian Statue's morph under the
+  buttonless Destroyer *unit* code `ubsp` instead of the real ability `aave`) and gaps (misses the
+  Barracks' `rhsb`). Source fixes both. The generator prints a diff of every unit where the two differ.
+- Same vendored `slk data/`, reproducible without a game install.
+
 ## Regenerating
 
 `wc3.json` is static — it only changes if the upstream data does. To refresh it, fetch

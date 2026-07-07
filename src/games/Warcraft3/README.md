@@ -19,12 +19,31 @@ comes from `_GAME_SLUG`, not the folder name.
   model, conflict rules, the race filter + category ordering, and the `GAME.*` wiring. Injected
   into the shell at the `/* __GAME_MODULE__ */` marker; wrapped in an IIFE so its internals stay
   private (it only registers `GAMES.warcraft3`).
-- **`data/wc3.json`** — the vendored dataset (unit/ability names, races, types, per-unit command
-  cards, the shared common-command lists, `shown` = playable-unit allowlist, `campaign` =
-  campaign-only units). Derived from an open-source editor — see **`data/SOURCE.md`** for
-  provenance/attribution (MIT).
+- **`data/wc3.json`** — the vendored dataset (unit/ability names, races, types, the shared
+  common-command lists, `shown` = playable-unit allowlist, `campaign` = campaign-only units).
+  Derived from an open-source editor — see **`data/SOURCE.md`** for provenance/attribution (MIT).
+  As of the source-cards work, the per-unit **command lists** here are **only a cross-check** — the
+  cards actually rendered come from `wc3_cards.json` (below); jcfields still supplies unit names,
+  races, types, the `shown`/`campaign` lists, and the common-command sets.
 - **`data/gen_wc3_data.js`** — one-off Node converter that (re)builds `wc3.json` from the upstream
   `data.js` + `index.html`. Not part of the Python build; only rerun if the upstream data changes.
+- **`data/wc3_cards.json`** — `unit code → [[cmd,name] | [cmd,name,form]]`: **each unit's command
+  card compiled from Blizzard's own game data**, built by **`data/gen_wc3_cards.py`** from
+  `unitabilities.slk` (abilList/heroAbilList) **merged with `unitskin.txt`'s `abilSkinList`** (the
+  Reforged skin lists are more current — they carry Call to Arms on the base Town Hall, Purge on the
+  Shaman, Possession on the Banshee, which the older abilList omits; a unit's card is deduped by
+  ability **name** so a multi-rawcode ability like Abolish Magic shows once) + the `*unitfunc.txt` production lists
+  (`Trains`/`Researches`/`Upgrade`/`Revive`/`Sellunits`/`Sellitems`; `Builds` feeds the worker's
+  separate Build sub-menu), placed in command-card slot order (`positions.json`). **Alternate-form
+  abilities are unioned in** — when a unit has a *morph* ability (Bear Form, Destroyer Form,
+  Robo-Goblin, Stone Form, …) that form's abilities are added, tagged with the alt-form unit code as
+  a third entry element so the editor scopes conflicts per form. A morph is distinguished from a
+  *summon* structurally: a morph references the caster itself in the ability's `DataA*`/`UnitID*`
+  fields, a summon only references the spawned unit. This is **more accurate than jcfields** (it fixes
+  e.g. the Obsidian Statue's morph — real code `aave` "Destroyer Form" with a card button, vs
+  jcfields' buttonless `ubsp` proxy — and recovers the Barracks' `rhsb`); `gen_wc3_cards.py` prints a
+  jcfields cross-check diff. Inlined into the build; the module (`setData`) uses it for `UNIT_CARD`,
+  falling back to the jcfields `wc3.json commands` for anything source doesn't cover.
 - **`data/wc3_names.json`** — `code → name` map that is the **source of truth for every command
   name** shown (unit-card commands, common commands, globals, and the Miscellaneous tail), built by
   **`data/gen_wc3_names.py`** from Warcraft III's own game data: the button action label from
@@ -46,6 +65,20 @@ comes from `_GAME_SLUG`, not the folder name.
   `melee` → the **Items** column, `campaign` → the Campaign column, and **drops `hidden` from the
   list** (`hidden:true`; the section still round-trips on save). (`droppable` is a red herring — it's
   `1` for ~every item, a template default, not a usage signal.)
+- **`data/wc3_misc.json`** — `code → "unbuilt"` for every unit whose build/train hotkey is dead, built
+  by **`data/gen_wc3_misc.py`** from `unitdata.slk` + `abilitydata.slk` + the `slk data/*unitfunc.txt`
+  profiles. Just as WC3 templates every *item* with purchase fields, it templates every *building/unit*
+  with a build/train command button (a `Buttonpos` + a `[code]` Hotkey section). A large family of
+  neutral buildings — the **Mercenary Camps** (one rawcode per tileset), **Dragon Roosts**, **Goblin
+  Laboratory / Merchant / Shipyard**, **Tavern** — is only ever *placed in the World Editor* (they're
+  in the random neutral-building pool, `nbrandom=1`), **never built by a unit**, so their "Build X"
+  hotkey never fires in a match. The generator tags a unit `"unbuilt"` when it's in **no** builder /
+  production / shop list (`Builds` / `Trains` / `Sellunits` / `Sellitems`) **and** referenced by **no**
+  ability (a summon/hire spell would make it melee-relevant). Inlined into the build; `module.js`
+  (`bindings()`) **drops `unbuilt` from the list** (`hidden:true`; the section still round-trips on
+  save). (`nbrandom`/`unitClass`/`campaign` — the unit analogues of an item's `pickRandom`/`class` —
+  only say the *building* is placed on maps, not that its build *command* is ever issued, so they're
+  not the hide signal; producibility is.)
 - **`data/wc3_icons.json`** — `{ classic: code → icon basename }` for the on-keyboard **ability-card
   icon overlay** (see below), extracted from `data.icons.classic` in the upstream `data.js`. Inlined
   into the build; `module.js` (`iconOf`) turns a binding's code into `icons/classic/<basename>.png`.
@@ -83,6 +116,13 @@ comes from `_GAME_SLUG`, not the folder name.
   (rebuilds `positions.json` from `data/slk data/*func.txt`; stdlib only).
 - **Refresh the item categories** (rare): `python3 games/Warcraft3/data/gen_wc3_items.py`
   (rebuilds `wc3_items.json` from `data/slk data/itemdata.slk` + the `*func.txt` profiles; stdlib only).
+- **Refresh the unbuildable-unit list** (rare): `python3 games/Warcraft3/data/gen_wc3_misc.py`
+  (rebuilds `wc3_misc.json` from `data/slk data/unitdata.slk` + `abilitydata.slk` + the `*unitfunc.txt`
+  profiles; stdlib only).
+- **Recompile the command cards** (rare): `python3 games/Warcraft3/data/gen_wc3_cards.py`
+  (rebuilds `wc3_cards.json` from `data/slk data/unitabilities.slk` + `abilitydata.slk` +
+  `*unitfunc.txt` + `positions.json`; stdlib only). Prints a jcfields cross-check diff — skim it after
+  a data change to catch anything source over/under-lists.
 - **Preview**: build, then `python3 -m http.server 8765` and open
   http://localhost:8765/site/warcraft3/index.html.
 
@@ -204,25 +244,50 @@ Cards:
   column. The rest — templated purchase sections no shop or pool ever offers — are **`"hidden"`** (see
   below). Items carry no unit/set scope, so — like Miscellaneous — they never raise conflicts (a given
   shop's live stock is per-map, so we don't treat the whole pool as one card).
-- **Miscellaneous** — the genuine remainder: bindings that are neither on a card, a tagged global, nor
-  an item — neutral **build/summon** commands (Build Mercenary Camp/Tavern/Dragon Roost, Summon
-  Clockwerk Goblin, …) and a few uncarded neutral abilities, for which the vendored game data carries
-  **no ownership link** (their owning unit/shop isn't in the base SLK/func tables — it's per-map). This
-  group sits in the **same column category as Campaign**. A record's name is `NAMES[code] ||
-  wc3_names.json[code] || the section's // comment || raw code`: `wc3_names.json` (~2268 codes, real
-  display names from the game's strings files) names everything; `NAMES` is an (empty) manual-override
-  map for any edge case the game data gets wrong. In the bundled default, nothing stays raw.
+- **Miscellaneous** — the catch-all for a leftover that is *none* of the above (not carded, not a
+  tagged global, not an item, not a producible unit). For the melee dataset this ends up **empty**:
+  every real command has a home (a unit/common card, a global group, or the Items column), and anything
+  left is dead/redundant and gets hidden (see below), so no "Miscellaneous" group renders. The group
+  still exists as a fallback (a record's name would resolve `NAMES[code] || wc3_names.json[code] ||
+  the // comment || raw code`) for any future/custom binding the data doesn't recognize.
 - **Hidden (`hidden:true`)** — dropped from the list but kept in the file (they still round-trip
-  byte-exact on save), because their hotkey can't fire in a real match. Two sources:
+  byte-exact on save), because their hotkey can't fire in a real match. Five sources:
+  - **Duplicate section blocks** — the game reads only the **first** `[code]` block of a case-folded
+    code collision (the codec keeps that first block as the `byCode` winner). A file with a second
+    `[ACdm]` / `[adsm]` / … block has that duplicate ignored by the game, so it's dropped from the list
+    while the real one stays correctly on its unit card(s). Detected structurally (a leftover bind that
+    isn't its code's winner), so it needs no data table. 5 records in the bundled default.
   - **Ruled-out template items** — item purchase sections tagged `"hidden"` by `wc3_items.json`: WC3
     templates every item alike, so these are boilerplate no shop or drop/marketplace pool offers (e.g.
     the `Miscellaneous`-class duplicate rawcodes — Ring of the Archmagi ×3 — and non-pooled runes/
     glyphs). ~89 of the bundled default's Miscellaneous tail.
-  - **Orphan ability rawcodes** — a small `HIDE` set, each a *second* code for an ability already
-    carded on a live melee unit under a different code and used by **no** unit in the dataset (e.g.
-    `aams` Anti-magic Shell → carded `aam2`, `edcm` Train Druid of the Claw → `edoc`). Editing the live
-    carded copy is what rebinds the in-game key. If the dataset changes, re-verify each is still
-    orphaned (used by no unit) before trusting the list.
+  - **Non-producible units** — train/build/summon sections tagged `"unbuilt"` by `wc3_misc.json`: WC3
+    templates every unit with a build/train button, but a unit's hotkey only fires if a **shown**
+    command-card button actually **produces** it (it's in some browsable unit's `Builds`/`Trains`/
+    `Sellunits`/`Sellitems` list). Several families never are: the neutral buildings only *placed in the
+    World Editor* (Mercenary Camps — one per tileset — Dragon Roosts, Goblin Laboratory/Merchant/
+    Shipyard, Tavern); every unit that only appears via an **ability** — summoned/morphed/hired (Doom
+    Guard, Clockwerk Goblin, the Destroyer form, Spirit Bear, …), where the *summoning ability's* hotkey
+    is pressed, not the unit's train button; and units produced only by an **unshown** (e.g. campaign)
+    unit — `nbal` Summon Doom Guard / `nfel` Fel Stalker are trained only by campaign Dreadlords, so
+    there's no reachable produce button. Their sections are dead; the unit's own **abilities** still card
+    normally. ~48 of the bundled default's tail. (Being ability-referenced does **not** rescue a unit.)
+  - **Redundant orphan rawcodes** — two mechanisms: (1) a **name already carded** rule — a leftover
+    whose ability is already shown on a card under a different rawcode is dropped (e.g. `auan` "Animate
+    Dead" while the Death Knight binds `aua2`); and (2) a small hand-verified `HIDE` map for cases a
+    name match can't catch: a redundant *build* code (`orbr` Build Reinforced Burrow — the Orc Burrow
+    `otrb` is upgraded in place by Reinforced Defenses, and `orbr` isn't even a real unit), a redundant
+    duplicate ability on one unit (`aenc` generic "Load" alongside the Entangled Gold Mine's real "Load
+    Wisp" `slo2`), and dead abilities defined in `abilitydata` but granted to **no** unit (`aetf`
+    Ethereal Form, `auuf` Incite Unholy Frenzy, the Pocket Factory internals `anfy`/`anf1`–`anf3`).
+    Editing the live carded copy is what rebinds the in-game key. If the dataset changes, re-verify.
+  - **Uncarded dregs** — the final fallback: a leftover that is none of carded / global / item /
+    producible-unit has no home in the data, so it's dropped. In the melee default these are dead
+    generic pseudo-commands (`cmdbuild`, and `cmdcanceltrain`/`cmdcancelrevive` — the real Build/Cancel
+    are the carded race-specific `cmdbuild*` / `cmdcancel*` codes), a buttonless or hidden-building-only
+    ability (`aatp` Prioritize — granted to the Gargoyle but with no `Buttonpos`; `aral` the Pocket
+    Factory's Rally), and a nameless dummy item (`mdpb`). This is what makes the melee Miscellaneous
+    empty.
 
 Every carded/common command name is resolved the same way — through `wc3_names.json` (the game's
 own strings, preferring the `Tip=` action label), with the jcfields `wc3.json` card label used only
@@ -243,7 +308,11 @@ Records carry a **channel**: `active` (a binding with a `Hotkey`) or `research` 
 `Researchhotkey`-only learn/upgrade key). These live on different sub-cards, so they never
 conflict across channels. `classify(a, b)` (the engine has already bucketed by exact combo and
 skipped same-binding pairs) → **confirmed** when same channel **and** the two share a card:
-- both on the same unit card (`same unit`), or
+- both on the same unit card (`same unit`) — but two commands can only really clash if they can be
+  on the card at once, so within a unit we exclude **alternates**: different morph **forms** never
+  coexist (a base-form ability and an alternate-form one carry different `form` tags → no clash),
+  and commands sharing the **same command-card slot** are one button (a tier upgrade like
+  Headhunter→Berserker, or a form toggle) → no clash; or
 - both in the same shared scope (`same set`) — a common card, or the melee-`global` scope (all
   control-group/camera/menu/selection globals share one scope), or the `spectator` scope, or
 - one is a common-card command and the other a unit ability whose unit **type** puts that common
