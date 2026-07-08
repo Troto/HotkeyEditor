@@ -521,22 +521,29 @@ function uTypesOverlap(ta, tb){
                                                  // (incl. 'ram' vs 'siege': only rams/siege towers
                                                  // unload, only artillery attacks ground/packs)
 }
-function ctxClassify(ra, rb){
+function ctxClassify(ra, rb, opts){
   if(ISOLATED_IDS.has(ra.id) || ISOLATED_IDS.has(rb.id)) return null;   // isolated sub-mode, never clashes
   if(sameMutex(ra.id, rb.id)) return null;   // civ-exclusive alternative slots never clash
   const note=noteFor(ra.id, rb.id);
   if(note) return {sev:'override', note:note};   // edge-case caution, not a real conflict
   const ca=recContext(ra), cb=recContext(rb);
-  if(ca==='G'&&cb==='G'){                                     // both always active -> clash,
-    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // unless civ-exclusive (e.g. Go to
-    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);    // Mule Cart vs Go to Lumber Camp --
-      if(!ov.length) return null;                             // Mule Cart civs have no Lumber Camp)
-      return {sev:'confirmed', civs:ov}; }
-    return {sev:'confirmed'};                                 // can't civ-verify -> always clash
-  }
   if(ca==='R'&&cb==='R') return {sev:'confirmed'};
-  if(ca==='R'||cb==='R') return null;
-  if(ca==='G'||cb==='G') return {sev:'override'};      // global shadowed by a card/selection
+  if(ca==='R'||cb==='R') return null;                        // replay mode never coexists with live play
+  const aG=ca==='G', bG=cb==='G';
+  if(aG||bG){
+    // A global (control groups, go-to, select-all, camera, zoom, chat) is active regardless of
+    // what's selected, so sharing a key with a card/selection command is a real clash. The
+    // "Allow global & local overlap" option (opts.globalOverlap) relaxes a global-vs-local pair
+    // to an override caution ("the active card shadows the global") -- but two globals always
+    // clash. Either way a civ-exclusive pair (no civ has both, e.g. Go to Mule Cart vs Go to
+    // Lumber Camp -- Mule Cart civs have no Lumber Camp) never coexists.
+    if(opts && opts.globalOverlap && !(aG&&bG)) return {sev:'override'};
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);
+      if(!ov.length) return null;
+      return {sev:'confirmed', civs:ov}; }
+    return {sev:'confirmed'};                                // can't civ-verify -> always clash
+  }
   const la=ca[0], lb=cb[0];
   if(la!==lb) return null;                              // different selection layers
   const ta=ca.slice(2), tb=cb.slice(2);
@@ -663,6 +670,7 @@ GAMES.aoe2 = {
     multiple: true,
     usesProfileName: true,        // show the profile-name field (download is <Name>.zip)
     hasChroniclesToggle: true,
+    hasGlobalOverlapToggle: true, // offer the "Allow global & local overlap" conflict option (uses the G/override tier)
     cardCols: 5, cardRows: 3,     // AoE2 command card geometry for the card-grid panel (5 wide x 3 tall)
     pathHelp:
       '<div class="helpsubhead">To get started</div>'

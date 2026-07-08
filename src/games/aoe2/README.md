@@ -222,7 +222,12 @@ and asks this module whether they can co-occur. AoE2's rules:
 - `G`+`G` → civ check by command id first: civ-exclusive globals (Go to / Select all of a
   building the other's civs don't have — e.g. **Go to Mule Cart** vs **Go to Lumber Camp**) →
   suppressed; overlapping or can't-verify → **confirmed**. `R`+`R` → **confirmed**.
-- `G` + any contextual → **override** (caution: the active card/selection shadows the global).
+- `G` + any contextual → by **default** a real clash (a global — control groups, go-to, select-all,
+  camera/zoom, chat — fires regardless of what's selected): civ-checked like `G`+`G` (civ-exclusive
+  pair → suppressed, else **confirmed**). The **"Allow global & local overlap"** option
+  (`ctxClassify`'s `opts.globalOverlap`, off by default; UI checkbox gated by
+  `meta.hasGlobalOverlapToggle`) relaxes a global-vs-local pair to an **override** caution instead
+  ("the active card/selection shadows the global") — two globals (`G`+`G`) still clash either way.
 - same `U` layer → confirmed iff unit-types overlap (`uTypesOverlap`).
 - `B` layer (villager build menu): different tab (eco vs mil) → no clash; **same tab** → civ
   check by command id (`civsForId`, `civ_data.json`): civ-exclusive buildings (Feitoria, Settlement,

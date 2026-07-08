@@ -111,15 +111,17 @@ def discover_games(root):
     return sorted(found, key=lambda g: g[0])
 
 
-def build_all(root):
+def build_all(root, copy_icons=False):
     """Build every discovered game's page, then write the combined launcher.
 
     Returns the list of (slug, name) successfully built.  THE all-games command
-    (root build.py is a thin wrapper around this).
+    (root build.py is a thin wrapper around this).  Icons are large and rarely
+    change, so they are only recopied into site/<slug>/icons/ when copy_icons is
+    True (each generator's build() takes the same flag).
     """
     built = []
     for slug, name, mod in discover_games(root):
-        if mod.build():                       # (slug, name) on success, None on failure
+        if mod.build(copy_icons=copy_icons):  # (slug, name) on success, None on failure
             built.append((slug, name))
         else:
             print('skipped %s (build failed)' % slug)

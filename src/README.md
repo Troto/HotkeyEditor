@@ -135,6 +135,9 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
   When the command sits in a keyboard **stack** (several of the selected card's commands share one base
   key via different modifiers), the preview spans the *whole* stack — each member checked at its own
   modifiers — so you can find a key clean for the whole set (the click still rebinds only the shown one).
+  Hovering a flagged key lists the anticipated clashes as a tooltip (same wording as the conflict
+  panel). For a **click-capture** this is the key's `title`; for a **keyboard drag** — which the browser
+  suppresses `title` on — a small cursor-following tooltip (`.dragtip`, fed on `dragover`) shows it.
 
 ## Module architecture (adding a game)
 

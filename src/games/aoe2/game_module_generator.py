@@ -442,12 +442,14 @@ def regen():
 
 # --- build the single-file site ----------------------------------------
 
-def build():
+def build(copy_icons=True):
     """Assemble the self-contained site/aoe2/index.html from page.html + module.js + json.
 
     The launcher is the orchestrator's job (build.py / page_assembler.build_all), so
     this only writes this game's page.  Returns (slug, name) on success, or None on
     failure -- the contract page_assembler.discover_games()/build_all() rely on.
+    copy_icons controls whether the (large, rarely-changed) icon folder is recopied
+    into site/aoe2/icons/; build_all passes it through from build.py's --icons flag.
     """
     page_path = os.path.join(_ROOT, 'page.html')
     module_path = os.path.join(_HERE, 'module.js')   # this game's engine-injected code
@@ -503,7 +505,8 @@ def build():
         print('ERROR: %s' % e)
         return None
     print('wrote site/%s/index.html (%d KB)' % (_GAME_SLUG, nbytes // 1024))
-    _copy_icons(os.path.dirname(out_path))
+    if copy_icons:
+        _copy_icons(os.path.dirname(out_path))
     return (_GAME_SLUG, _GAME_NAME)
 
 
