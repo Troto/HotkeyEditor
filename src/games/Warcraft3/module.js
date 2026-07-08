@@ -733,8 +733,10 @@ GAMES.warcraft3 = {
     hasChroniclesToggle: false,
     cardCols: 4, cardRows: 3,     // WC3 command card geometry for the card-grid panel (4 wide x 3 tall)
     pathHelp:
-      '<p><b>To get started:</b> load your <code>CustomKeys.txt</code>.</p>'
-      + '<p><b>Where it lives:</b> your Warcraft III folder — for Reforged, '
+      '<div class="helpsubhead">To get started</div>'
+      + '<p>Load your <code>CustomKeys.txt</code>.</p>'
+      + '<div class="helpsubhead">Where it lives</div>'
+      + '<p>Your Warcraft III folder — for Reforged, '
       + '<code>Documents\\Warcraft III\\CustomKeys.txt</code>.</p>'
       + '<p>Edit hotkeys here, download the file, and put it back. Enable <i>Custom Hotkeys</i> '
       + 'in the game\'s gameplay options for it to take effect.</p>',

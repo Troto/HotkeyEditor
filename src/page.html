@@ -57,13 +57,14 @@
   .helpcard b { color: #cfe0ff; }
   .helpcard p { margin: 0 0 6px; color: #c3cad6; line-height: 1.45; }
   .helpcard p:last-child { margin: 0; }
-  .helpcard .helptip { margin-top: 8px; font-size: 12.5px; color: #9aa3b2; }
+  /* labelled sub-sections inside the Getting started card: each label on its own line, with
+     breathing room between the blocks it introduces (first one flush to the card top) */
+  .helpcard .helpsubhead { margin: 16px 0 5px; font-size: 14px; font-weight: 700; color: #cfe0ff; }
+  .helpcard .helpsubhead:first-child { margin-top: 0; }
   .helpcard code { display: inline-block; background: #0e1117; border: 1px solid #2c313d; border-radius: 4px;
                    padding: 1px 6px; font-size: 12px; color: #e3ecff; word-break: break-all; }
   /* headings sit ABOVE their card (not inside), as prominent as the section dividers */
   .helphead { grid-column: 1 / -1; margin: 6px 0 2px; font-size: 15px; font-weight: 700; color: #cfe0ff; }
-  /* Getting started leads the guide, so make it unmissable */
-  .helphead.hero { margin: 0 0 4px; font-size: 23px; color: #fff; }
   /* full-width section divider between the Fast Bind and Advanced Bind groups of cards */
   .helpsection { grid-column: 1 / -1; margin: 6px 0 -2px; padding-bottom: 5px; font-size: 15px;
                  font-weight: 700; color: #cfe0ff; border-bottom: 1px solid #2c313d; }
@@ -338,6 +339,18 @@
   /* the "how to apply the download" note is likewise hidden until a profile is loaded */
   .dlnote { display: none; }
   body.file-loaded .dlnote { display: block; }
+  /* the Fast/Adv bind toggle (moved out of the keyboard sidebar) + its own "?" guide badge sit
+     centred near the bottom of the header; both only matter once a profile is loaded. */
+  .hdrbind { display: none; position: absolute; left: 50%; bottom: 12px; transform: translateX(-50%);
+             align-items: center; gap: 10px; }
+  body.file-loaded .hdrbind { display: flex; }
+  /* scale the bind toggle up here so it reads at a similar weight to its 42px "?" badge
+     (leaves the toolbar's QWERTY/Dvorak switch, which shares .layout-toggle/.switch, alone) */
+  .hdrbind .layout-toggle { font-size: 15px; gap: 10px; }
+  .hdrbind .switch { width: 54px; height: 28px; }
+  .hdrbind .switch .slider { border-radius: 28px; }
+  .hdrbind .switch .slider:before { height: 22px; width: 22px; }
+  .hdrbind .switch input:checked + .slider:before { transform: translateX(26px); }
   /* group-heading sample (used in the "?" overlay's Groups card): the real heading look, static */
   .khgrpdemo { width: 210px; display: flex; align-items: center; gap: 6px; padding-bottom: 4px;
                border-bottom: 1px solid #2c313d; color: #8c93a3; text-transform: uppercase;
@@ -517,19 +530,35 @@
   <div class="sub dlnote" id="applyNote" style="margin-top:4px"></div>
   </div>
   </div>
+  <div class="hdrbind">
+    <span class="layout-toggle bindmode" title="Fast Bind: rebind straight from the keyboard — group headings select the group (showing its commands on the keyboard) instead of collapsing, and commands with no icon show their name on their key; click or drag keys to rebind. Adv Bind: the detailed list with per-command hotkey buttons.">
+      <span class="lt-lbl lt-active" id="pkF">Fast Bind</span>
+      <label class="switch"><input type="checkbox" id="preferKbToggle" autocomplete="off"><span class="slider"></span></label>
+      <span class="lt-lbl" id="pkA">Adv Bind</span>
+    </span>
+    <span class="helpq" id="bindHelpBtn" title="Bind modes — how Fast &amp; Advanced Bind work (click)">?</span>
+  </div>
 </header>
 <div class="helpoverlay" id="helpOverlay">
-  <div class="helpsheet" role="dialog" aria-modal="true" aria-label="How it works">
+  <div class="helpsheet" role="dialog" aria-modal="true" aria-label="Getting started">
     <button class="helpclose" id="helpClose" title="Close (Esc)" aria-label="Close">&times;</button>
-    <h2 class="helptitle">How it works</h2>
+    <h2 class="helptitle">Getting started</h2>
     <p class="helpsub">Hover to explore, click to rebind. Nothing touches your game — edits only change the file you <b>Download</b>; copy it back to apply.</p>
     <div class="helpgrid">
-      <div class="helphead hero">Getting started</div>
       <div class="helpcard wide">
         <div id="pathHelpBody"></div>
-        <p class="helptip"><b>Layout:</b> set the <b>QWERTY / Dvorak</b> switch to match the layout your file was made in — it converts the binds and relabels the keyboard.</p>
+        <div class="helpsubhead">Layout</div>
+        <p>Set the <b>QWERTY / Dvorak</b> switch to match the layout your file was made in — it converts the binds and relabels the keyboard.</p>
       </div>
-
+    </div>
+  </div>
+</div>
+<div class="helpoverlay" id="bindHelpOverlay">
+  <div class="helpsheet" role="dialog" aria-modal="true" aria-label="Bind modes">
+    <button class="helpclose" id="bindHelpClose" title="Close (Esc)" aria-label="Close">&times;</button>
+    <h2 class="helptitle">Bind modes</h2>
+    <p class="helpsub">Two ways to edit — <b>Fast Bind</b> on the on-screen keyboard, or <b>Advanced Bind</b> in the command list. Flip between them with the <b>Fast Bind / Adv Bind</b> switch.</p>
+    <div class="helpgrid">
       <div class="helpvs">
         <div class="vscol">
           <div class="helphead">Fast Bind</div>
@@ -632,8 +661,9 @@
     <div class="kbstage">
       <!-- left column, top-to-bottom: checkbox options, then the conflict panel (its header
            carries the summary + Hide/Show Conflicts button; the panel flexes to fill the leftover
-           height and scrolls its own body), then the Adv/Fast bind toggle, list tools + race
-           filter — the last three anchored to the bottom above/below the keyboard's gutter. -->
+           height and scrolls its own body), then the list tools + race filter anchored to the
+           bottom above/below the keyboard's gutter.  (The Adv/Fast bind toggle now lives in the
+           header — see .hdrbind.) -->
       <div class="kbside">
         <div class="kbtools">
           <label class="tg" title="Shades each keyboard key darker the more commands are bound to it, so heavily-used keys stand out."><input type="checkbox" id="shadeToggle" checked autocomplete="off"> Shade keys by # bound</label>
@@ -651,11 +681,6 @@
           </div>
           <div class="cpbody" id="conflictbody"></div>
         </aside>
-        <span class="layout-toggle bindmode" title="Fast Bind: rebind straight from the keyboard — group headings select the group (showing its commands on the keyboard) instead of collapsing, and commands with no icon show their name on their key; click or drag keys to rebind. Adv Bind: the detailed list with per-command hotkey buttons.">
-          <span class="lt-lbl lt-active" id="pkF">Fast Bind</span>
-          <label class="switch"><input type="checkbox" id="preferKbToggle" autocomplete="off"><span class="slider"></span></label>
-          <span class="lt-lbl" id="pkA">Adv Bind</span>
-        </span>
         <div class="listtools"><button id="collapseAll" class="sm">collapse all</button><button id="expandAll" class="sm">expand all</button><div class="filterbox" id="filterbox"><span class="flbl">filter by:</span><input type="search" id="search" placeholder="commands…" autocomplete="off"><span id="kbbanner"></span></div></div>
         <div class="filterbar" id="filterbar" style="display:none"></div>
       </div>
@@ -2053,15 +2078,18 @@ function applyKbModeUI(){
   const ca=document.getElementById('collapseAll'), ea=document.getElementById('expandAll');
   if(ca) ca.disabled=dis; if(ea) ea.disabled=dis;
 }
-// "?" badge: open the full-page interaction guide overlay (getting-started + how it works).
-// Close via the ×, a click on the dimmed backdrop, or Esc.
-const helpOverlay=document.getElementById('helpOverlay');
-function openHelp(){ helpOverlay.classList.add('open'); }
-function closeHelp(){ helpOverlay.classList.remove('open'); }
-document.getElementById('pathHelpBtn').addEventListener('click', openHelp);
-document.getElementById('helpClose').addEventListener('click', closeHelp);
-helpOverlay.addEventListener('click', e=>{ if(e.target===helpOverlay) closeHelp(); });   // backdrop only
-document.addEventListener('keydown', e=>{ if(e.key==='Escape' && helpOverlay.classList.contains('open')) closeHelp(); });
+// Two "?" badges, each opening a full-page guide overlay: the toolbar "?" shows Getting
+// started; the bind-toggle "?" shows the Bind modes guide. Each closes via its ×, a click on
+// the dimmed backdrop, or Esc (which closes whichever is open).
+function wireHelp(btnId, overlayId, closeId){
+  const overlay=document.getElementById(overlayId);
+  document.getElementById(btnId).addEventListener('click', ()=>overlay.classList.add('open'));
+  document.getElementById(closeId).addEventListener('click', ()=>overlay.classList.remove('open'));
+  overlay.addEventListener('click', e=>{ if(e.target===overlay) overlay.classList.remove('open'); });   // backdrop only
+}
+wireHelp('pathHelpBtn','helpOverlay','helpClose');
+wireHelp('bindHelpBtn','bindHelpOverlay','bindHelpClose');
+document.addEventListener('keydown', e=>{ if(e.key==='Escape') document.querySelectorAll('.helpoverlay.open').forEach(o=>o.classList.remove('open')); });
 document.getElementById('collapseAll').addEventListener('click', collapseAll);
 document.getElementById('expandAll').addEventListener('click', expandAll);
 document.getElementById('save').addEventListener('click', save);

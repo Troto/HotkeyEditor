@@ -665,11 +665,14 @@ GAMES.aoe2 = {
     hasChroniclesToggle: true,
     cardCols: 5, cardRows: 3,     // AoE2 command card geometry for the card-grid panel (5 wide x 3 tall)
     pathHelp:
-      '<p><b>To get started:</b> load the two files for your current hotkey layout/profile.</p>'
-      + '<p><b>Hotkey folder:</b> AoE2:DE hotkeys live in your profile folder at</p>'
+      '<div class="helpsubhead">To get started</div>'
+      + '<p>Load the two files for your current hotkey layout/profile.</p>'
+      + '<div class="helpsubhead">Hotkey folder</div>'
+      + '<p>AoE2:DE hotkeys live in your profile folder at</p>'
       + '<p><code>C:\\Users\\&lt;you&gt;\\Games\\Age of Empires 2 DE\\&lt;Steam ID&gt;\\profile</code></p>'
       + '<p>Each profile is <b>two files</b> — <code>&lt;Name&gt;.hkp</code> at the profile root, '
       + 'and <code>&lt;Name&gt;\\Base.hkp</code> inside a subfolder of the same name.</p>'
+      + '<div class="helpsubhead">Downloading</div>'
       + '<p>The download will provide both files in that structure; extract them and then copy '
       + 'them back to your profile folder (after backing up the profile and deleting it in game '
       + 'if you play on through Steam).</p>',
