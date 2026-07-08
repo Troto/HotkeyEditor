@@ -281,6 +281,63 @@ let BUILD_POSITIONS = {};    // command id -> villager build-submenu slot 0-14 (
 let DEFAULTS = null;         // bundled default profile {profile,base} as base64 .hkp bytes
 function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
 
+// ---- building "bundle" groups ----
+// Two convenience groups that gather, per building, its Build card plus its related "Go to X" /
+// "Select all X" commands, so all of a building's binds are visible/editable at once.  They REUSE
+// the same rec objects (engine's GAME.extraGroups), so editing here syncs the normal groups.
+// Membership is DERIVED from the data every load (not a hand id-list, which would go stale on a
+// patch — see the civ-data lesson): the Build menu commands carry ctx B:eco/B:mil (that's the
+// building's bundle + its name), and each Go-to/Select-all is matched to a building by name.
+const BUNDLE_ECO = 'All Eco Buildings Bundle';
+const BUNDLE_MIL = 'All Military Buildings Bundle';
+let bundleOf = new Map();     // command id -> BUNDLE_ECO | BUNDLE_MIL  (rebuilt in setData)
+// normalise a name for building-noun matching: lowercase, alphanumerics + spaces only
+function bnorm(s){ return (s||'').toLowerCase().replace(/[^a-z0-9 ]/g,'').trim(); }
+// singularise the last word so a plural "Select all X" noun matches the singular Build noun
+function bsingular(p){
+  const w=p.split(' '); let last=w[w.length-1];
+  if(/ies$/.test(last)) last=last.slice(0,-3)+'y';        // Monasteries -> Monastery
+  else if(/(ses|shes|ches|xes)$/.test(last)) last=last.slice(0,-2);
+  else if(/s$/.test(last) && !/ss$/.test(last)) last=last.slice(0,-1);   // Stables -> Stable (Barracks stays via alias/exact)
+  w[w.length-1]=last; return w.join(' ');
+}
+// a couple of irregular Go-to/Select-all nouns that don't reduce to the Build noun by rule
+const BUNDLE_ALIAS = { 'wonder or monument':'wonder', 'wonders and monuments':'wonder' };
+function buildBundles(){
+  bundleOf = new Map();
+  const byId = cardData && cardData.byId; if(!byId) return;
+  const nounBundle = new Map();     // normalised building noun -> bundle
+  // 1) Build-menu commands: ctx tells the bundle; the command name IS the building noun.
+  for(const id in byId){
+    const ctx = byId[id][1];
+    const b = ctx==='B:eco' ? BUNDLE_ECO : ctx==='B:mil' ? BUNDLE_MIL : null;
+    if(!b) continue;
+    bundleOf.set(+id, b);
+    nounBundle.set(bnorm(strings[id]), b);
+  }
+  // 2) Go-to / Select-all globals: match the trailing noun to a building, inherit its bundle.
+  for(const id in byId){
+    if(byId[id][1] !== 'G') continue;
+    const nm = strings[id] || '';
+    const m = /^(?:go to|select all) (.+)$/i.exec(nm);
+    if(!m) continue;
+    let noun = bnorm(m[1]);
+    noun = BUNDLE_ALIAS[noun] || noun;
+    const b = nounBundle.get(noun) || nounBundle.get(bsingular(noun));
+    if(b) bundleOf.set(+id, b);
+  }
+}
+function extraGroupsOf(r){
+  const b = bundleOf.get(r.id);
+  return b ? [b] : [];
+}
+// Bundles live in the Buildings column category (02) and, being "All …", sort to the top of it;
+// they aren't a single building's command card, so they render no card-grid panel.
+function groupMetaOf(name){
+  return (name===BUNDLE_ECO || name===BUNDLE_MIL)
+    ? { key:'02|'+name, cat:'02', card:false } : null;
+}
+
 // ---- command naming ----
 function baseName(id){ return strings[id] || ('id '+id); }
 function recName(r){
@@ -464,22 +521,29 @@ function uTypesOverlap(ta, tb){
                                                  // (incl. 'ram' vs 'siege': only rams/siege towers
                                                  // unload, only artillery attacks ground/packs)
 }
-function ctxClassify(ra, rb){
+function ctxClassify(ra, rb, opts){
   if(ISOLATED_IDS.has(ra.id) || ISOLATED_IDS.has(rb.id)) return null;   // isolated sub-mode, never clashes
   if(sameMutex(ra.id, rb.id)) return null;   // civ-exclusive alternative slots never clash
   const note=noteFor(ra.id, rb.id);
   if(note) return {sev:'override', note:note};   // edge-case caution, not a real conflict
   const ca=recContext(ra), cb=recContext(rb);
-  if(ca==='G'&&cb==='G'){                                     // both always active -> clash,
-    const fa=civsForId(ra.id), fb=civsForId(rb.id);           // unless civ-exclusive (e.g. Go to
-    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);    // Mule Cart vs Go to Lumber Camp --
-      if(!ov.length) return null;                             // Mule Cart civs have no Lumber Camp)
-      return {sev:'confirmed', civs:ov}; }
-    return {sev:'confirmed'};                                 // can't civ-verify -> always clash
-  }
   if(ca==='R'&&cb==='R') return {sev:'confirmed'};
-  if(ca==='R'||cb==='R') return null;
-  if(ca==='G'||cb==='G') return {sev:'override'};      // global shadowed by a card/selection
+  if(ca==='R'||cb==='R') return null;                        // replay mode never coexists with live play
+  const aG=ca==='G', bG=cb==='G';
+  if(aG||bG){
+    // A global (control groups, go-to, select-all, camera, zoom, chat) is active regardless of
+    // what's selected, so sharing a key with a card/selection command is a real clash. The
+    // "Allow global & local overlap" option (opts.globalOverlap) relaxes a global-vs-local pair
+    // to an override caution ("the active card shadows the global") -- but two globals always
+    // clash. Either way a civ-exclusive pair (no civ has both, e.g. Go to Mule Cart vs Go to
+    // Lumber Camp -- Mule Cart civs have no Lumber Camp) never coexists.
+    if(opts && opts.globalOverlap && !(aG&&bG)) return {sev:'override'};
+    const fa=civsForId(ra.id), fb=civsForId(rb.id);
+    if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);
+      if(!ov.length) return null;
+      return {sev:'confirmed', civs:ov}; }
+    return {sev:'confirmed'};                                // can't civ-verify -> always clash
+  }
   const la=ca[0], lb=cb[0];
   if(la!==lb) return null;                              // different selection layers
   const ta=ca.slice(2), tb=cb.slice(2);
@@ -606,14 +670,17 @@ GAMES.aoe2 = {
     multiple: true,
     usesProfileName: true,        // show the profile-name field (download is <Name>.zip)
     hasChroniclesToggle: true,
+    hasGlobalOverlapToggle: true, // offer the "Allow global & local overlap" conflict option (uses the G/override tier)
     cardCols: 5, cardRows: 3,     // AoE2 command card geometry for the card-grid panel (5 wide x 3 tall)
-    pathHelpTitle: 'Where AoE2:DE hotkeys go (click for details)',
     pathHelp:
-      '<p><b>To get started:</b> load the two files for your current hotkey layout/profile.</p>'
-      + '<p><b>Hotkey folder:</b> AoE2:DE hotkeys live in your profile folder at</p>'
+      '<div class="helpsubhead">To get started</div>'
+      + '<p>Load the two files for your current hotkey layout/profile.</p>'
+      + '<div class="helpsubhead">Hotkey folder</div>'
+      + '<p>AoE2:DE hotkeys live in your profile folder at</p>'
       + '<p><code>C:\\Users\\&lt;you&gt;\\Games\\Age of Empires 2 DE\\&lt;Steam ID&gt;\\profile</code></p>'
       + '<p>Each profile is <b>two files</b> — <code>&lt;Name&gt;.hkp</code> at the profile root, '
       + 'and <code>&lt;Name&gt;\\Base.hkp</code> inside a subfolder of the same name.</p>'
+      + '<div class="helpsubhead">Downloading</div>'
       + '<p>The download will provide both files in that structure; extract them and then copy '
       + 'them back to your profile folder (after backing up the profile and deleting it in game '
       + 'if you play on through Steam).</p>',
@@ -656,6 +723,7 @@ GAMES.aoe2 = {
     POSITIONS = d.positions || {};
     BUILD_POSITIONS = d.build_positions || {};
     DEFAULTS = d.defaults || null;
+    buildBundles();               // derive the per-building bundle membership from strings + card_data
   },
   fileStatus: fileStatus,        // load-status chips for the toolbar (doc, name) -> html
   isComplete: function(doc){ return !!(doc && doc.profile && doc.base); },  // need BOTH .hkp files before editing
@@ -663,6 +731,8 @@ GAMES.aoe2 = {
   bindings: buildEntries,        // doc -> the engine's editable rec list
   forEachEntry: forEachEntry,    // iterate raw entries of a doc (used by the layout remap)
   groupOf: groupNameOf,          // display group heading for a rec
+  extraGroups: extraGroupsOf,    // extra (bundle) groups a rec also appears in -- same rec, edits sync
+  groupMeta: groupMetaOf,        // per-group column category/sort/card override (bundles -> Buildings, no card)
   context: recContext,           // conflict-scope code for a rec
   classify: ctxClassify,         // do two same-combo recs clash? -> tier | null
   recName: recName,              // display name for a rec

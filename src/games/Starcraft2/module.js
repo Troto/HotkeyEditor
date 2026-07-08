@@ -480,11 +480,12 @@ GAMES.starcraft2 = {
     usesProfileName: true,          // download is named <profile>.SC2Hotkeys
     hasChroniclesToggle: false,
     cardCols: CARD_COLS, cardRows: CARD_ROWS,
-    pathHelpTitle: 'Where StarCraft II hotkey files go (click for details)',
     pathHelp:
-      '<p><b>To get started:</b> load a <code>.SC2Hotkeys</code> profile, or click '
+      '<div class="helpsubhead">To get started</div>'
+      + '<p>Load a <code>.SC2Hotkeys</code> profile, or click '
       + '<b>Load defaults</b> to start from the standard multiplayer defaults.</p>'
-      + '<p><b>Where they live:</b> <code>Documents\\StarCraft II\\Hotkeys\\</code>.</p>'
+      + '<div class="helpsubhead">Where they live</div>'
+      + '<p><code>Documents\\StarCraft II\\Hotkeys\\</code>.</p>'
       + '<p>Edit here, download the file, drop it in that folder, and select the profile in the '
       + 'game\'s <i>Options → Hotkeys</i> menu.</p>',
     placeholder: 'Load a <code>.SC2Hotkeys</code> file to view and edit StarCraft II hotkeys, '

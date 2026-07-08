@@ -138,6 +138,7 @@ var DATA = null;            // the raw dataset
 var DEFAULTS = '';          // bundled default CustomKeys.txt text (the "good defaults")
 var NAMESDATA = {};         // code -> name from the SLK tables (data.names), for Miscellaneous labels
 var ITEMCAT = {};           // item code -> 'shop'|'powerup'|'campaign' (data.items, from itemdata.slk)
+var DEADUNIT = {};          // unit code -> 'unbuilt': a build/train hotkey nothing can issue (data.misc, gen_wc3_misc.py)
 var ICONS = {};             // lower-cased command code -> classic icon basename (data.icons.classic)
 var POS = { b: {}, r: {}, u: {} };  // code -> command-card slot (data/positions.json): active / research / off-state
 var CAMPAIGN = {};          // unit key -> 1 for campaign-only units (from index.html Campaign lists)
@@ -148,8 +149,16 @@ var UNIT_LABEL = {};        // unit key -> "Race -- Name" (the group / context l
 var COMMON_ORDER = [];      // common-set keys present (basic/hero/noAttack/tower), in display order
 var COMMON_LABEL = {        // common-set -> its shared "card" label (shown once, not per unit)
   basic: 'Common — Unit Commands', hero: 'Common — Hero Commands',
-  noAttack: 'Common — Non-attacking Commands', tower: 'Common — Tower Commands'
+  noAttack: 'Common — Non-attacking Commands', tower: 'Common — Tower Commands',
+  building: 'Common — Building Commands'
 };
+// Commands the game puts on (nearly) every production building's command card -- lifted off the
+// individual building cards into one shared "Common — Building Commands" card (like Move/Stop for
+// units), so they're shown once instead of repeating on all ~58 buildings.  Names come from the
+// game strings at emit time (NAMESDATA); the label here is just a fallback.  Keyed lower-case for
+// the strip in setData.
+var BUILDING_COMMON = [['cmdrally', 'Set Rally Point'], ['cmdcancelbuild', 'Cancel']];
+var BUILDING_COMMON_SET = {}; BUILDING_COMMON.forEach(function (c) { BUILDING_COMMON_SET[c[0].toLowerCase()] = 1; });
 // Item purchase hotkeys have no shop card in the base game data (see README).  WC3 templates every
 // item with the same fields, so most of these purchase sections are boilerplate the game never uses;
 // gen_wc3_items.py (data.items -> ITEMCAT) tags each item by whether its purchase hotkey is ever
@@ -162,14 +171,15 @@ var RACE_LABEL = {
   bloodelf: 'Blood Elf', draenei: 'Draenei', demon: 'Demon', naga: 'Naga', neutral: 'Neutral'
 };
 var RACE_RANK = { human: 0, orc: 1, undead: 2, nightelf: 3, bloodelf: 4, draenei: 5, demon: 6, naga: 7, neutral: 8 };
-// a unit's type -> which shared common-command set sits on its card (buildings/other: none)
-var COMMON_BY_TYPE = { unit: 'basic', summon: 'basic', hero: 'hero', item: 'hero', noAttack: 'noAttack', tower: 'tower' };
+// a unit's type -> which shared common-command set sits on its card (other: none)
+var COMMON_BY_TYPE = { unit: 'basic', summon: 'basic', hero: 'hero', item: 'hero', noAttack: 'noAttack', tower: 'tower', building: 'building' };
 
 function setData(d) {
   DATA = (d && d.units) ? d : null;
   DEFAULTS = (d && d.defaults) || '';
   NAMESDATA = (d && d.names) || {};
   ITEMCAT = (d && d.items) || {};
+  DEADUNIT = (d && d.misc) || {};
   ICONS = (d && d.icons && d.icons.classic) || {};
   POS = (d && d.positions) || { b: {}, r: {}, u: {} };
   CAMPAIGN = {}; ((d && d.campaign) || []).forEach(function (c) { CAMPAIGN[c] = 1; });
@@ -186,10 +196,20 @@ function setData(d) {
   });
   Object.keys(include).forEach(function (key) {
     var u = DATA.units[key];
-    if (!u.commands || !u.commands.length) return;           // nothing of our own to show
-    var card = new Map();                                     // dedupe by code (last name wins)
-    u.commands.forEach(function (c) { card.set(c[0], c[1]); });
-    UNIT_CARD[key] = Array.from(card.entries());
+    // Card commands come from the source-compiled data (data.cards, from gen_wc3_cards.py: the unit's
+    // real abilities + trains/builds/researches at their in-game slots, with alternate-form abilities
+    // merged in), falling back to the jcfields dataset for anything source doesn't cover.
+    var cmds = (DATA.cards && DATA.cards[key]) || u.commands;
+    if (!cmds || !cmds.length) return;                       // nothing of our own to show
+    var card = new Map();                                     // dedupe by code (last wins); [name, form]
+    cmds.forEach(function (c) {
+      var lc = c[0].toLowerCase();
+      // skip Set Rally Point (lifted to the shared building-commons card) and any HIDE code
+      // (redundant/dead rawcode, e.g. orbr Build Reinforced Burrow that a source build menu re-lists)
+      if (BUILDING_COMMON_SET[lc] || HIDE[lc]) return;
+      card.set(c[0], [c[1], c[2] || '']);                    // c[2] = morph alternate-form tag, if any
+    });
+    UNIT_CARD[key] = Array.from(card.entries()).map(function (e) { return [e[0], e[1][0], e[1][1]]; });
     // The race filter already scopes the list to a race, so a "Human — " prefix on every Human
     // card is noise.  Drop it for the four main (natively selectable) races.  Genuinely neutral
     // units get a trailing "(Neutral)" tag instead of a "Neutral — " prefix, so they read as the
@@ -208,7 +228,9 @@ function setData(d) {
     if (ra !== rb) return ra - rb;
     return UNIT_LABEL[a].localeCompare(UNIT_LABEL[b]);
   });
-  ['basic', 'hero', 'noAttack', 'tower'].forEach(function (s) {
+  // the shared building-commands card is ours (not in the jcfields common data), so seed it
+  if (DATA.common) DATA.common.building = BUILDING_COMMON;
+  ['basic', 'hero', 'noAttack', 'tower', 'building'].forEach(function (s) {
     if (DATA.common && DATA.common[s] && DATA.common[s].length) COMMON_ORDER.push(s);
   });
 }
@@ -340,7 +362,7 @@ function bindings(doc) {
   // would show twice on the card.  Keyed by group + binding id, so the same line still appears on
   // genuinely different cards, just once per card.
   function dup(group, id) { var k = group + '\x00' + id; if (onCard[k]) return true; onCard[k] = 1; return false; }
-  function emitCommand(unit, set, group, code, name) {
+  function emitCommand(unit, set, group, code, name, form) {
     var lc = code.toLowerCase();
     var slot = doc.byCode[lc];
     if (!slot) return;                                       // no CustomKeys section for this command
@@ -355,29 +377,46 @@ function bindings(doc) {
     // learn key (Researchhotkey only).  These sit on different sub-cards, so they never conflict
     // with each other -- e.g. a research key of S must not clash with the active Stop command.
     var ch = slot.Hotkey ? 'active' : 'research';
-    recs.push({ e: primary, id: primary.id, unit: unit, set: set, ch: ch, name: name, group: group, hidden: false, chron: false });
+    form = form || '';                                       // '' = base form; else the alt (morph) unit
+    recs.push({ e: primary, id: primary.id, unit: unit, set: set, ch: ch, form: form, name: name, group: group, hidden: false, chron: false });
     // Unhotkey gets its own "— Off" row only for genuine two-state buttons (Call to Arms / Back
     // to Work etc., flagged by an UnhotkeyId) AND when it differs from the primary.  Most abilities
     // carry a leftover Unhotkey (e.g. Gather) that isn't a real player hotkey -- skip those so they
     // don't show up or raise spurious conflicts.
     if (slot.Unhotkey && slot.Unhotkey.sec.twoState && comboKey(slot.Unhotkey) !== comboKey(primary))
-      recs.push({ e: slot.Unhotkey, id: slot.Unhotkey.id, unit: unit, set: set, ch: 'active', name: name + ' — Off', group: group, hidden: false, chron: false });
+      recs.push({ e: slot.Unhotkey, id: slot.Unhotkey.id, unit: unit, set: set, ch: 'active', form: form, name: name + ' — Off', group: group, hidden: false, chron: false });
   }
   // shared common-command cards (shown once each, not repeated under every unit)
   COMMON_ORDER.forEach(function (set) {
     DATA.common[set].forEach(function (c) { emitCommand(null, set, COMMON_LABEL[set], c[0], c[1]); });
   });
-  // per-unit command cards (the unit's own abilities)
+  // per-unit command cards (the unit's own abilities); c[2] = morph alternate-form tag, if any
   UNIT_ORDER.forEach(function (unit) {
-    UNIT_CARD[unit].forEach(function (c) { emitCommand(unit, null, UNIT_LABEL[unit], c[0], c[1]); });
+    UNIT_CARD[unit].forEach(function (c) { emitCommand(unit, null, UNIT_LABEL[unit], c[0], c[1], c[2]); });
   });
+  // names now carded on some unit/common card -- used to spot redundant orphan rawcodes below (a
+  // leftover whose ability is already carded under a different code, e.g. auan "Animate Dead" while
+  // the Death Knight's card binds aua2).
+  var cardedNames = {};
+  recs.forEach(function (r) { if ((r.unit || r.set) && !r.hidden) cardedNames[r.name] = 1; });
   // binds not on any unit card: global commands (control groups, camera, menu, item/hero slots,
   // observer/replay) get their own named groups; item-purchase hotkeys are grouped by kind
-  // (data.items); a few stale duplicate rawcodes are hidden; the genuine remainder falls to
-  // "Miscellaneous" (neutral build/summon commands with no ownership in the vendored data).
+  // (data.items); build/train hotkeys of units nothing can produce are hidden (data.misc); a few
+  // stale duplicate rawcodes are hidden; the genuine remainder falls to "Miscellaneous" (neutral
+  // build/summon commands with no ownership in the vendored data).
   doc.binds.forEach(function (b) {
     if (used[b.id]) return;
     var suffix = b.key === 'Hotkey' ? '' : KEY_SUFFIX[b.key];
+    // A duplicate [code] block: the game reads only the FIRST section of a case-folded code
+    // collision (byCode kept that first block as the winner), so a later duplicate block's hotkey
+    // can never fire.  The winner is what's carded/shown; drop the duplicate (still round-trips on
+    // save).  This is why e.g. a second [ACdm] (Abolish Magic) block shows up here while the real
+    // one sits correctly on its unit cards.
+    var slot = doc.byCode[b.codeLc];
+    if (slot && slot[b.key] && slot[b.key] !== b) {
+      recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
+        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return;
+    }
     // A verified-stale duplicate rawcode (checked first, since a couple are also item codes):
     // kept in the file, dropped from the list (hidden:true) so the live carded copy is what's shown.
     if (HIDE[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
@@ -386,6 +425,14 @@ function bindings(doc) {
     if (g) { recs.push({ e: b, id: b.id, unit: null, set: g.set, ch: channelOf(b.key),
       name: (GLOBAL_NAMES[b.codeLc] || nameOf(b)) + suffix,
       group: g.group, hidden: false, chron: false }); return; }
+    // An unbuildable unit's templated build/train hotkey: WC3 gives every building/unit a build
+    // command button, but a large family of neutral buildings (Mercenary Camps -- one rawcode per
+    // tileset -- Dragon Roosts, Goblin Laboratory/Merchant/Shipyard, Tavern) is only ever *placed*
+    // in the World Editor, never built by any unit (no Builds/Trains/Sell list holds them, no
+    // ability summons them; gen_wc3_misc.py -> DEADUNIT).  The build hotkey can never fire in a
+    // match, so drop it from the list (still round-trips on save, like the hidden item templates).
+    if (DEADUNIT[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
     var it = ITEMCAT[b.codeLc];
     // 'hidden' item: a templated purchase hotkey no shop or drop/marketplace pool ever offers, so
     // it can't fire in a match -- drop it from the list (still round-trips on save, like HIDE above).
@@ -394,8 +441,22 @@ function bindings(doc) {
     // 'melee' (neutral drop/marketplace/shop pool) or 'campaign' -> its own column, not Miscellaneous
     if (it) { recs.push({ e: b, id: b.id, unit: null, set: null, item: it, ch: channelOf(b.key),
       name: nameOf(b) + suffix, group: ITEM_LABEL[it], hidden: false, chron: false }); return; }
+    // Redundant orphan rawcode: the game already binds this ability under a different code that IS
+    // carded (the name is already shown on some card), so this leftover can't add anything -- drop it
+    // (still round-trips on save).  Skip engine cmd* commands, whose names ("Cancel") legitimately
+    // repeat.
+    if (!(/^cmd/i).test(b.codeLc) && cardedNames[nameOf(b)]) {
+      recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
+        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return;
+    }
+    // Anything still here is not carded, not a recognized global command, not an item, and not a
+    // producible unit -- the game data gives it no home: a dead generic pseudo-command (cmdbuild,
+    // cmdcanceltrain/cmdcancelrevive -- the real Build/Cancel are the carded race-specific codes), a
+    // buttonless or hidden-building-only ability (Prioritize, the Pocket Factory's Rally), or a
+    // nameless dummy item.  It can't be shown in context, so drop it from the list (kept in the file,
+    // round-trips on save).  This empties Miscellaneous for the melee dataset.
     recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: false, chron: false });
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false });
   });
   return recs;
 }
@@ -463,18 +524,35 @@ function setSlotDoc(doc, rec, slot, card) {
 // empty for now.
 var NAMES = {};
 
-// Orphan/stale ability rawcodes: each is a *second* rawcode for an ability that's already carded
-// on a live melee unit under a different code, and is itself used by NO unit in the dataset (verified
-// against every unit's command list -- the carded twin is the one the game actually binds).  They
-// only clutter the file's tail, so we drop them from the list (the section still round-trips on save,
-// untouched; editing the carded copy is what changes the in-game key).  Value = the live carded code
-// kept, for the record.  If the dataset ever changes, re-verify before trusting these.
+// Orphan/stale/redundant rawcodes whose hotkey can never fire in a real match, so we drop them from
+// the list (the section still round-trips on save, untouched; editing the live carded copy is what
+// changes the in-game key).  Value = the live carded code kept (for the record), or `true` when the
+// code is simply dead with no carded twin.  Three flavours, all verified against the vendored game
+// data -- if the dataset ever changes, re-verify before trusting these:
+//   (a) a *second* rawcode for an ability already carded on a live melee unit, itself used by NO unit;
+//   (b) a redundant *build* code (orbr) -- see note below;
+//   (c) a dead ability defined in abilitydata but granted to NO unit and referenced by no item/
+//       spellbook, so nothing can ever cast it (Ethereal Form, the Pocket Factory internals, ...).
 var HIDE = {
-  aams: 'aam2', apos: 'aps2', aua2: 'auan', anic: 'ania',   // Anti-magic Shell / Possession / Animate Dead / Incinerate
-  ugrm: 'ugar', edcm: 'edoc', edtm: 'edot',                 // Train Gargoyle / Druid of the Claw / Druid of the Talon
-  egol: 'aent', aroo: 'aro1', aenc: 'aloa',                 // Entangle Gold Mine / Root / Load
+  // (a) orphan ability rawcodes -- carded twin used by the live unit
+  // NOTE: only codes NOT carded by the source cards belong here -- since the source-compiled cards
+  // (data.cards) now bind the *correct* rawcode for an ability (e.g. aua2 Animate Dead on the Death
+  // Knight, aenc Load on the Entangled Gold Mine), those must NOT be listed or they'd be filtered off
+  // their real card.  The orphan is the OTHER rawcode (auan, aloa, ...), left in Miscellaneous.
+  aams: 'aam2', apos: 'aps2', anic: 'ania',                 // Anti-magic Shell / Possession / Incinerate (orphan rawcodes)
+  ugrm: 'ugar', edcm: 'edoc', edtm: 'edot',                 // Gargoyle Stone Form / Druid of the Claw / Talon (alt-form unit binds)
+  egol: 'aent', aroo: 'aro1',                               // Entangle Gold Mine / Root (leftover unit binds)
+  aenc: 'slo2',                                             // generic "Load" the Entangled Gold Mine's abilList carries alongside the real "Load Wisp" (slo2) -- game shows only Load Wisp
   nalm: 'nalc', nal2: 'nalc', nal3: 'nalc', nrob: 'ntin',   // Summon Alchemist (x3) / Summon Tinker
-  ofr2: 'ofir', olig: 'oli2'                                // Orb of Fire / Orb of Lightning (shop-item dupes)
+  ofr2: 'ofir', olig: 'oli2',                               // Orb of Fire / Orb of Lightning (shop-item dupes)
+  // (b) Build Reinforced Burrow: the Reinforced Burrow has no separate melee build -- the Orc Burrow
+  //     (otrb, carded on cmdbuildorc) is upgraded in place by Reinforced Defenses.  Only the Peon's
+  //     superset Builds list (which also holds non-melee entries like the Voodoo Lounge) names orbr,
+  //     and orbr isn't even a real unit in unitdata -- so its build hotkey is dead.
+  orbr: 'otrb',
+  // (c) dead ability templates -- granted to no unit, not item/spellbook-referenced (verified)
+  aetf: true, auuf: true,                                   // Ethereal Form (Destroyer's removed toggle) / Incite Unholy Frenzy
+  anfy: true, anf1: true, anf2: true, anf3: true            // Goblin Pocket Factory internal Factory/upgrade abilities
 };
 
 // Global-command families -> a display group + conflict scope + which column category they land in.
@@ -546,9 +624,25 @@ function ctxLabel(ctx) {
 // record also clashes with any unit-ability record whose unit's type maps to that common set --
 // i.e. the shared common cards still conflict against the per-unit cards.  Active and research
 // keys live on different sub-cards, so they never conflict across channels.
+// a command's slot on its unit's command card (Buttonpos), for the alternates rule below
+function slotKey(r) {
+  var c = r.e && r.e.codeLc;
+  if (!c) return null;
+  return POS.b[c] != null ? POS.b[c] : (POS.r[c] != null ? POS.r[c] : null);
+}
 function classify(ra, rb) {
   if (ra.ch !== rb.ch) return null;                          // active vs research: different cards
-  if (ra.unit && rb.unit) return ra.unit === rb.unit ? { sev: 'confirmed' } : null;
+  if (ra.unit && rb.unit) {
+    if (ra.unit !== rb.unit) return null;
+    // Same unit -- but two commands can only really clash if they can be on the card at once:
+    //  - different morph forms never coexist (a unit is in one form at a time), so no clash;
+    //  - the same command-card slot holds one button, so codes sharing a slot are alternates
+    //    (a tier upgrade like Headhunter->Berserker, or a form toggle) -- not a clash.
+    if ((ra.form || '') !== (rb.form || '')) return null;
+    var sa = slotKey(ra), sb = slotKey(rb);
+    if (sa != null && sb != null && sa === sb) return null;
+    return { sev: 'confirmed' };
+  }
   if (ra.set && rb.set) return ra.set === rb.set ? { sev: 'confirmed' } : null;
   var u = ra.unit ? ra : rb.unit ? rb : null;               // the unit-card record (if any)
   var c = ra.set ? ra : rb.set ? rb : null;                 // the common-card record (if any)
@@ -590,7 +684,7 @@ var CAT_ITEMS = 5;      // shop / powerup item-purchase hotkeys (campaign items 
 // (observer/replay) all share the first (common) category so the global hotkeys stay in one
 // column instead of stranding observer/replay in a sparse column of their own. Spectator keeps
 // its separate *conflict* scope (see context()); this only controls column placement.
-var SET_CAT = { basic: 0, hero: 0, noAttack: 0, tower: 0, global: 0, spectator: 0 };
+var SET_CAT = { basic: 0, hero: 0, noAttack: 0, tower: 0, building: 0, global: 0, spectator: 0 };
 function pad2(n) { return (n < 10 ? '0' : '') + n; }
 function catOf(r) {
   if (r.item) return r.item === 'campaign' ? CAT_CAMPAIGN : CAT_ITEMS;  // campaign items join the campaign column
@@ -638,10 +732,11 @@ GAMES.warcraft3 = {
     usesProfileName: false,       // the download is always CustomKeys.txt
     hasChroniclesToggle: false,
     cardCols: 4, cardRows: 3,     // WC3 command card geometry for the card-grid panel (4 wide x 3 tall)
-    pathHelpTitle: 'Where Warcraft III custom hotkeys go (click for details)',
     pathHelp:
-      '<p><b>To get started:</b> load your <code>CustomKeys.txt</code>.</p>'
-      + '<p><b>Where it lives:</b> your Warcraft III folder — for Reforged, '
+      '<div class="helpsubhead">To get started</div>'
+      + '<p>Load your <code>CustomKeys.txt</code>.</p>'
+      + '<div class="helpsubhead">Where it lives</div>'
+      + '<p>Your Warcraft III folder — for Reforged, '
       + '<code>Documents\\Warcraft III\\CustomKeys.txt</code>.</p>'
       + '<p>Edit hotkeys here, download the file, and put it back. Enable <i>Custom Hotkeys</i> '
       + 'in the game\'s gameplay options for it to take effect.</p>',

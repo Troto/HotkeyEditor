@@ -29,12 +29,14 @@ sys.path.insert(0, _ROOT)                                     # for the shared p
 import page_assembler                                         # noqa: E402
 
 
-def build():
+def build(copy_icons=True):
     """Assemble the self-contained site/starcraft2/index.html from page.html + module.js + data.
 
     Inlines data/sc2.json (units -> command cards -> buttons, with default keys + grid positions)
     plus data/sc2_icons.json (command -> icon url) for the module's setData.  Returns (slug, name)
-    on success or None on failure -- the page_assembler.build_all contract.
+    on success or None on failure -- the page_assembler.build_all contract.  copy_icons controls
+    whether the (large, rarely-changed) icon folder is recopied into site/starcraft2/icons/;
+    build_all passes it through from build.py's --icons flag.
     """
     page_path = os.path.join(_ROOT, 'page.html')
     module_path = os.path.join(_HERE, 'module.js')
@@ -59,7 +61,8 @@ def build():
         print('ERROR: %s' % e)
         return None
     print('wrote site/%s/index.html (%d KB)' % (_GAME_SLUG, nbytes // 1024))
-    _copy_icons(os.path.dirname(out_path))
+    if copy_icons:
+        _copy_icons(os.path.dirname(out_path))
     return (_GAME_SLUG, _GAME_NAME)
 
 

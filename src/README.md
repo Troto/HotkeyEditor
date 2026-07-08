@@ -110,7 +110,11 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
   independent of the game (a load is interpreted as the current toggle position).
 - **Command list** grouped into collapsible columns with a filter box. By default groups are
   ordered alphabetically and balanced across columns; a game may instead supply an order
-  (`groupKey`) and strict per-category columns (`groupCategory`, see below).
+  (`groupKey`) and strict per-category columns (`groupCategory`, see below). A game may also place
+  a command in **extra groups** beyond its home group (`extraGroups(rec) → [name]`) — the *same*
+  rec object, so the two views edit in sync — and override a group's column placement / card-grid
+  visibility per group (`groupMeta(name, recs) → {key?, cat?, card?}`) instead of inheriting its
+  first rec's. AoE2 uses both for its per-building **bundle** groups (see its README).
 - **Category filter buttons** (when a game supplies `filters`) — e.g. WC3's race buttons; a
   single-select bar that narrows the list, composing with the search box. Absent for AoE2.
 - **Strict category columns** (when a game supplies `groupCategory`) — instead of one balanced
@@ -125,6 +129,15 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
   **confirmed** (red ⚠), **possible** (amber ⚐), **override** (blue ⓘ) — shown as key rings,
   row markers, and a toolbar badge that filters the list to flagged commands. The *rules* are
   the game's; the pairing, display, and tiers are the engine's.
+- **Rebind-conflict preview:** while a command is being rebound (a capture is live), every key that
+  *would* clash if it landed there — with the currently-armed modifiers — gets an inset severity ring,
+  so you can pick a clean key at a glance (current-state rings give way to the preview while capturing).
+  When the command sits in a keyboard **stack** (several of the selected card's commands share one base
+  key via different modifiers), the preview spans the *whole* stack — each member checked at its own
+  modifiers — so you can find a key clean for the whole set (the click still rebinds only the shown one).
+  Hovering a flagged key lists the anticipated clashes as a tooltip (same wording as the conflict
+  panel). For a **click-capture** this is the key's `title`; for a **keyboard drag** — which the browser
+  suppresses `title` on — a small cursor-following tooltip (`.dragtip`, fed on `dragover`) shows it.
 
 ## Module architecture (adding a game)
 
@@ -207,3 +220,13 @@ A game's `module.js` defines its implementations and registers itself via
   via `GECKO`.
 - A game's file-format parser must round-trip **byte-exact**; verify after any change (AoE2 has
   a Python oracle + a JS port that are checked against each other).
+- **Ability-icon art occludes anything drawn *inside* a key.** When a game supplies `icon`, a
+  selected/hovered card overlays each command's art as a `.keyimg` on its key — an
+  `position:absolute; inset:0` child (scaled `1.12`) that fills the `overflow:hidden` key. It has
+  no `z-index`, so it paints over the key's own background *and any inset `box-shadow`*. So a cue
+  meant to sit **inside** a key (e.g. the rebind-preview `wclash-*` ring) is invisible on icon-bearing
+  keys unless it's lifted above the art — draw it on a `::after` overlay with a `z-index` (the
+  preview ring uses `z-index:2`; the icon is `z-index:auto`). Cues drawn **outside** the key border
+  (the outer `.conflict`/`.clash` rings, `.capturing`'s outline/glow) are unaffected. This is why the
+  drag/click clash-preview once appeared only *after* dropping onto an icon key — the pre-drop inset
+  ring was hidden behind the icon, while the post-drop conflict ring is an outer one.

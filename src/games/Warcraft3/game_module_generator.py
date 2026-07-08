@@ -26,18 +26,22 @@ sys.path.insert(0, _ROOT)                                     # for the shared p
 import page_assembler                                         # noqa: E402
 
 
-def build():
+def build(copy_icons=True):
     """Assemble the self-contained site/warcraft3/index.html from page.html + module.js + data.
 
     Inlines data/wc3.json (names/grouping/conflict tables) plus the bundled "good defaults" file
     (so the page offers a one-click default load) for the module's setData.  Returns (slug, name)
-    on success or None on failure -- the page_assembler.build_all contract.
+    on success or None on failure -- the page_assembler.build_all contract.  copy_icons controls
+    whether the (large, rarely-changed) icon folder is recopied into site/warcraft3/icons/;
+    build_all passes it through from build.py's --icons flag.
     """
     page_path = os.path.join(_ROOT, 'page.html')
     module_path = os.path.join(_HERE, 'module.js')
     data_path = os.path.join(_HERE, 'data', 'wc3.json')
     names_path = os.path.join(_HERE, 'data', 'wc3_names.json')
     items_path = os.path.join(_HERE, 'data', 'wc3_items.json')
+    misc_path = os.path.join(_HERE, 'data', 'wc3_misc.json')
+    cards_path = os.path.join(_HERE, 'data', 'wc3_cards.json')
     icons_path = os.path.join(_HERE, 'data', 'wc3_icons.json')
     positions_path = os.path.join(_HERE, 'data', 'positions.json')
     defaults_path = os.path.join(_HERE, 'HotkeyFiles', 'Sensible Reforged CustomKeys.txt')
@@ -60,6 +64,17 @@ def build():
     except FileNotFoundError:
         print('WARNING: %s missing; item-purchase hotkeys stay in Miscellaneous'
               % os.path.basename(items_path))
+    try:
+        with open(misc_path, encoding='utf-8') as f:
+            data['misc'] = json.load(f)        # unit code -> 'unbuilt' (dead build/train hotkey; gen_wc3_misc.py)
+    except FileNotFoundError:
+        print('WARNING: %s missing; unbuildable-building hotkeys stay in Miscellaneous'
+              % os.path.basename(misc_path))
+    try:
+        with open(cards_path, encoding='utf-8') as f:
+            data['cards'] = json.load(f)       # unit code -> [[cmd,name]] compiled from source SLK/func (gen_wc3_cards.py)
+    except FileNotFoundError:
+        print('WARNING: %s missing; unit cards fall back to the jcfields dataset' % os.path.basename(cards_path))
     try:
         with open(icons_path, encoding='utf-8') as f:
             data['icons'] = json.load(f)       # { classic: code -> icon basename } for the card overlay
@@ -84,7 +99,8 @@ def build():
         print('ERROR: %s' % e)
         return None
     print('wrote site/%s/index.html (%d KB)' % (_GAME_SLUG, nbytes // 1024))
-    _copy_icons(os.path.dirname(out_path))
+    if copy_icons:
+        _copy_icons(os.path.dirname(out_path))
     return (_GAME_SLUG, _GAME_NAME)
 
 

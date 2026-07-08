@@ -32,11 +32,13 @@ Sources: unit/tech buttons from the `.dat` (`button_id - 1`); command actions fr
 | 3 | 0,3 | `19041` | Hand Cannoneer |
 | 3 | 0,3 | `19126` | Slinger, Grenadier |
 | 5 | 1,0 | `19458` | Tech: Crossbowman, Arbalester |
+| 6 | 1,1 | `19459` | Tech: Elite, Imperial Skirmisher |
 | 7 | 1,2 | `19149` | Tech: Elite Bolas Rider |
 | 7 | 1,2 | `19460` | Tech: Heavy Cavalry Archer, Elite Elephant Archer |
 | 8 | 1,3 | `19032` | Genitour |
 | 10 | 2,0 | `19461` | Tech: Thumb Ring |
 | 12 | 2,2 | `19462` | Tech: Parthian Tactics |
+| 13 | 2,3 | `19463` | Tech: Elite Genitour |
 
 ## Barracks
 
@@ -49,8 +51,10 @@ Sources: unit/tech buttons from the `.dat` (`button_id - 1`); command actions fr
 | 3 | 0,3 | `19141` | Flemish Militia |
 | 3 | 0,3 | `419001` | Hoplite |
 | 3 | 0,3 | `419216` | Phalangite |
+| 5 | 1,0 | `19451` | Tech: Swordsmen, Champi Upgrades |
 | 6 | 1,1 | `19452` | Tech: Pikeman, Halberdier |
 | 8 | 1,3 | `19453` | Tech: Eagle Warrior, Fire Lancer, Hoplite |
+| 8 | 1,3 | `19166` | Tech: Elite Ibirapema, Temple Guard |
 | 8 | 1,3 | `419217` | Tech: Elite Phalangite |
 | 10 | 2,0 | `19454` | Tech: Gambesons |
 | 10 | 2,0 | `419038` | Tech: Battle Drills |
@@ -164,6 +168,8 @@ Sources: unit/tech buttons from the `.dat` (`button_id - 1`); command actions fr
 | 3 | 0,3 | `19047` | Bombard Cannon, Traction Trebuchet |
 | 3 | 0,3 | `19134` | Flaming Camel, Mounted Trebuchet |
 | 5 | 1,0 | `19150` | Tech: Siege Elephant |
+| 5 | 1,0 | `19475` | Tech: Capped, Siege Ram |
+| 6 | 1,1 | `19476` | Tech: (Siege) Onager, Heavy Rocket Cart |
 | 7 | 1,2 | `19477` | Tech: Heavy Scorpion |
 | 8 | 1,3 | `19142` | Tech: Houfnice |
 | 13 | 2,3 | `19048` | Siege Tower |
@@ -183,6 +189,8 @@ Sources: unit/tech buttons from the `.dat` (`button_id - 1`); command actions fr
 | 3 | 0,3 | `419218` | Sannāhya |
 | 5 | 1,0 | `19464` | Tech: Light Cavalry, Hussar |
 | 6 | 1,1 | `19151` | Tech: Elite Shrivamsha Rider |
+| 6 | 1,1 | `19465` | Tech: Knight-line, Hei Guang Cavalry |
+| 7 | 1,2 | `19466` | Tech: Heavy, Imperial Camel Rider |
 | 8 | 1,3 | `19152` | Tech: Elite Battle Elephant |
 | 8 | 1,3 | `19467` | Tech: Elite Steppe Lancer |
 | 8 | 1,3 | `419004` | Tech: Elite War Chariot |
@@ -281,8 +289,8 @@ Source: each building’s `.dat` `creatable.train_locations` → the "Builder" u
 # Command-card commands still with no slot
 (gate + fish-trap actions, line-upgrade `Tech: X-line` techs, generic unique-unit slots)
 
-- **Archery Range:** `19459` Tech: Elite, Imperial Skirmisher, `19463` Tech: Elite Genitour, `419141` Cycle Recruitment Doctrine (Archery Range)
-- **Barracks:** `19125` Infantry Unique Units, `19166` Tech: Elite Ibirapema, Temple Guard, `19451` Tech: Swordsmen, Champi Upgrades, `419140` Cycle Recruitment Doctrine (Barracks)
+- **Archery Range:** `419141` Cycle Recruitment Doctrine (Archery Range)
+- **Barracks:** `19125` Infantry Unique Units, `419140` Cycle Recruitment Doctrine (Barracks)
 - **Blacksmith:** `19470` Tech: Melee Attack Upgrades, `19471` Tech: Infantry Armor Upgrades, `19472` Tech: Cavalry Armor Upgrades, `19473` Tech: Arrow Attack Upgrades, `19474` Tech: Archer Armor Upgrades
 - **Castle:** `19080` Tech: Elite Unique Unit, `19081` Tech: Unique Castle Technology, `19082` Tech: Unique Imperial Technology, `19130` Elite Kipchak (Mercenary), `19321` Trebuchet, Heroes, `19322` Unique Unit
 - **Dock:** `19053` Unique Warships, `19101` Toggle Automatic Fish Trap Rebuilding, `19123` Rebuild Fish Trap, `19344` Tech: War Galley, Galleon, `19457` Tech: Elite Unique Ship
@@ -296,8 +304,8 @@ Source: each building’s `.dat` `creatable.train_locations` → the "Builder" u
 - **Port:** `19183` Toggle Automatic Fish Trap Rebuilding, `19184` Rebuild Fish Trap, `419013` Transport Ship, `419015` Tech: (War, Heavy, Elite) Lembos, `419057` Toggle Trading Ratio
 - **Settlement:** `19168` Spearman-line, `19169` Tech: Farm, Pasture Upgrades, `19171` Tech: Gold Upgrades, `19173` Tech: Stone Upgrades, `19175` Tech: Wood Upgrades, `19179` Skirmisher, `19188` Tech: Pikeman, Halberdier, `19189` Tech: Elite, Imperial Skirmisher
 - **Shipyard:** `419020` Galley, `419026` Tech: (Heavy, Elite) Galley, `419027` Tech: (Heavy) Incendiary Ship
-- **Siege Workshop:** `19475` Tech: Capped, Siege Ram, `19476` Tech: (Siege) Onager, Heavy Rocket Cart
-- **Stable:** `19465` Tech: Knight-line, Hei Guang Cavalry, `19466` Tech: Heavy, Imperial Camel Rider, `419003` War Chariot, `419142` Cycle Recruitment Doctrine (Stable)
+- **Siege Workshop:** _(all mapped)_
+- **Stable:** `419003` War Chariot, `419142` Cycle Recruitment Doctrine (Stable)
 - **Town Center:** `19054` Villager, `19336` Tech: Age Up
 - **University:** `19496` Tech: Tower Upgrades
 - **gate:** `19122` Lock/Unlock Gate, `19331` Rotate Gate Clockwise, `19332` Rotate Gate Counterclockwise
