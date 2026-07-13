@@ -3701,7 +3701,10 @@
         const filter = document.getElementById('search').value.trim().toLowerCase();
         const kset = keyFilterSet();
         const rf = (listFilter && GAME.recFilters) ? listFilter : null;   // active game filter (e.g. race)
-        const forceOpen = !!filter || !!selectedKey || showConflictsOnly || showUnboundOnly;
+        // A filter normally pops matching groups open. In normal (keyboard) mode a key filter is
+        // the exception: keep those groups as collapsed heading-selectors (hover previews their keys
+        // on the board, rebinding happens there) so the advanced-only per-row hotkey buttons don't leak in.
+        const forceOpen = !!filter || showConflictsOnly || showUnboundOnly || (!!selectedKey && !preferKbBinds);
         const vis = [];
         groupedView.forEach(group => {
             const recs = group.recs.filter(r =>
