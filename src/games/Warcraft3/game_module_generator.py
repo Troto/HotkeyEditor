@@ -12,6 +12,7 @@ Note the source folder is `games/Warcraft3/` (capitalised) but the slug -- and t
 
 Stdlib only (works on Python 3.7).
 """
+import glob
 import json
 import os
 import shutil
@@ -44,7 +45,7 @@ def build(copy_icons=True):
     cards_path = os.path.join(_HERE, 'data', 'wc3_cards.json')
     icons_path = os.path.join(_HERE, 'data', 'wc3_icons.json')
     positions_path = os.path.join(_HERE, 'data', 'positions.json')
-    defaults_path = os.path.join(_HERE, 'HotkeyFiles', 'Sensible Reforged CustomKeys.txt')
+    defaults_path = os.path.join(_HERE, 'HotkeyFiles', 'DefaultLayout', 'Sensible Reforged CustomKeys.txt')
     try:
         module_js = open(module_path, encoding='utf-8').read()
         with open(data_path, encoding='utf-8') as f:
@@ -92,6 +93,18 @@ def build(copy_icons=True):
             data['defaults'] = f.read()       # bundled into GAME_DATA -> module setData -> loadDefault
     except FileNotFoundError:
         print('WARNING: %s missing; "load defaults" button will be hidden' % os.path.basename(defaults_path))
+    # Bundled "recommended" layout for the one-click "try my layout" box: a single CustomKeys.txt
+    # in HotkeyFiles/RecommendedLayout/, inlined like defaults (CRLF preserved).  Optional -- an
+    # empty/absent folder just leaves the box hidden (module.js gates on hasRecommended).
+    rec_dir = os.path.join(_HERE, 'HotkeyFiles', 'RecommendedLayout')
+    rec_files = sorted(glob.glob(os.path.join(rec_dir, '*.txt')))
+    if rec_files:
+        rec_path = rec_files[0]
+        stem = os.path.splitext(os.path.basename(rec_path))[0]
+        with open(rec_path, encoding='utf-8', newline='') as f:
+            data['recommended'] = {'name': stem, 'text': f.read()}
+    else:
+        print('note: no CustomKeys .txt in HotkeyFiles/RecommendedLayout/; "try my layout" box hidden')
     out_path = os.path.join(_ROOT, 'site', _GAME_SLUG, 'index.html')
     try:
         nbytes = page_assembler.assemble(page_path, data, out_path, module_js, _GAME_SLUG)

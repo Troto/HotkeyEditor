@@ -15,6 +15,7 @@ Note the source folder is `games/Starcraft2/` (capitalised) but the slug -- and 
 
 Stdlib only (works on Python 3.7).
 """
+import glob
 import json
 import os
 import shutil
@@ -52,8 +53,21 @@ def build(copy_icons=True):
     try:
         with open(icons_path, encoding='utf-8') as f:
             data['icons'] = json.load(f)         # command -> "icons/<file>.png" for the card overlay
+        _warn_stale_icons(data)
     except FileNotFoundError:
         print('WARNING: %s missing; ability-icon overlay disabled' % os.path.basename(icons_path))
+    # Bundled "recommended" ergonomic layout for the one-click "try my layout" box.  A .SC2Hotkeys
+    # profile is plain INI text, so inline it verbatim (module.js loadRecommended parses it at
+    # runtime, like loadDefault).  Optional: an empty/absent RecommendedLayout/ just hides the box.
+    rec_dir = os.path.join(_HERE, 'HotkeyFiles', 'RecommendedLayout')
+    rec_files = sorted(glob.glob(os.path.join(rec_dir, '*.SC2Hotkeys')))
+    if rec_files:
+        rec_path = rec_files[0]
+        stem = os.path.splitext(os.path.basename(rec_path))[0]
+        with open(rec_path, encoding='utf-8') as f:
+            data['recommended'] = {'name': stem, 'text': f.read()}
+    else:
+        print('note: no .SC2Hotkeys in HotkeyFiles/RecommendedLayout/; "try my layout" box hidden')
     out_path = os.path.join(_ROOT, 'site', _GAME_SLUG, 'index.html')
     try:
         nbytes = page_assembler.assemble(page_path, data, out_path, module_js, _GAME_SLUG)
@@ -64,6 +78,27 @@ def build(copy_icons=True):
     if copy_icons:
         _copy_icons(os.path.dirname(out_path))
     return (_GAME_SLUG, _GAME_NAME)
+
+
+def _warn_stale_icons(data):
+    """Warn if any card button has an icon in the data but no entry in sc2_icons.json.
+
+    module.js resolves overlays via ICONS[command] (iconOf), so a command missing from the
+    map renders with no icon even though the art exists -- the classic symptom of a stale
+    sc2_icons.json (a command was added to sc2.json after the icon map was last regenerated).
+    Non-fatal: just flags the gap so `python3 data/gen_sc2_icons.py` gets re-run.
+    """
+    icons = data.get('icons') or {}
+    missing = []
+    for u in data.get('units', {}).values():
+        for card in u.get('cards', []):
+            for b in card.get('buttons', []):
+                if b.get('icon') and b['command'] not in icons and b['command'] not in missing:
+                    missing.append(b['command'])
+    if missing:
+        shown = ', '.join(missing[:5]) + ('...' if len(missing) > 5 else '')
+        print('WARNING: %d command(s) have an icon but are missing from sc2_icons.json '
+              '(stale map -- re-run data/gen_sc2_icons.py): %s' % (len(missing), shown))
 
 
 def _copy_icons(out_dir):

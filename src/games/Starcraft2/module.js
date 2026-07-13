@@ -59,19 +59,50 @@ function parseKey(value) {
   return out;
 }
 
-// Render an editable bind back to an SC2 value string ('' = unbound).
+// Base key token for a VK code (letter / digit / SC2 special-name), or null if none maps.
+function tokenOfVk(code) {
+  if (code >= 65 && code <= 90) return String.fromCharCode(code);   // A-Z
+  if (code >= 48 && code <= 57) return String.fromCharCode(code);   // 0-9
+  return VK_TO_SPECIAL[code] || null;
+}
+
+// Render an editable bind back to an SC2 value string ('' = unbound). Modifiers use the game's
+// canonical Control+Shift+Alt order (matches the order .SC2Hotkeys files are written in).
 function formatKey(b) {
-  var base;
-  if (b.code >= 65 && b.code <= 90) base = String.fromCharCode(b.code);        // A-Z
-  else if (b.code >= 48 && b.code <= 57) base = String.fromCharCode(b.code);   // 0-9
-  else if (VK_TO_SPECIAL[b.code]) base = VK_TO_SPECIAL[b.code];
-  else if (b.raw) base = b.raw;
-  else return '';                                                             // unbound
+  var base = tokenOfVk(b.code);
+  if (base == null) base = b.raw;
+  if (base == null) return '';                                     // unbound
   var s = '';
-  if (b.shift) s += 'Shift+';
   if (b.ctrl) s += 'Control+';
+  if (b.shift) s += 'Shift+';
   if (b.alt) s += 'Alt+';
   return s + base;
+}
+
+// Everything after the first comma of a value (the alternate bindings), '' if none. SC2 allows
+// several keys per command, e.g. `Larva=0,P,SemiColon` -> primary `0`, alternates `P,SemiColon`.
+function altStr(value) {
+  var i = String(value == null ? '' : value).indexOf(',');
+  return i < 0 ? '' : String(value).slice(i + 1);
+}
+
+// Convert every base key token in an SC2 value string through a VK remap `m` (the QWERTY<->Dvorak
+// map the layout toggle builds), preserving modifiers, the multi-bind (comma) structure, and any
+// unknown token (e.g. LeftMouseButton) verbatim. Returns { value, n } with n tokens remapped.
+function remapValueStr(value, m) {
+  if (value == null || value === '') return { value: value, n: 0 };
+  var n = 0;
+  var parts = String(value).split(',').map(function (part) {
+    var plus = part.split('+');
+    var base = plus[plus.length - 1].trim();
+    var vk = null;
+    if (/^[A-Za-z]$/.test(base)) vk = base.toUpperCase().charCodeAt(0);
+    else if (/^[0-9]$/.test(base)) vk = base.charCodeAt(0);
+    else if (SPECIAL_TO_VK[base] != null) vk = SPECIAL_TO_VK[base];
+    if (vk != null && m[vk] !== undefined) { plus[plus.length - 1] = tokenOfVk(m[vk]); n++; return plus.join('+'); }
+    return part;
+  });
+  return { value: parts.join(','), n: n };
 }
 
 function sameKey(a, b) {
@@ -133,6 +164,7 @@ function unparse(raw, hotkeyLines, commandLines) {
 var CARD_COLS = 5, CARD_ROWS = 3;               // SC2 command card is 5 wide x 3 tall
 var DATA = null;
 var ICONS = {};
+var RECOMMENDED = null;   // bundled recommended layout { name, text } (a .SC2Hotkeys profile), or null
 var TEMPLATES = {};   // outName -> binding template {name, command, universal, def:{code,...}}
 var OCC = [];         // one entry per on-card button occurrence -> a record
 var CTX_LABEL = {};   // context -> display group label (unit + sub-card)
@@ -220,6 +252,50 @@ function buildGlobals() {
   for (var c = 0; c < 4; c++) add('CommanderAbility' + c, 'Commander (Co-op)', 'Commander Ability ' + (c + 1), '');
 }
 
+// The in-game editor writes the [Hotkeys] section in a fixed, hand-authored enumeration order -- NOT
+// alphabetical (audio toggles first, StatusOwner before StatusAlly, CameraSave/CameraView last) and
+// unrelated to our on-screen GLOBALS grouping. Emitting our own order made a profile "move" the first
+// time it was re-saved in the game (spurious diff noise on round-trip). This list is that exact order,
+// captured from a game-saved profile; it covers every global we model. ([Commands], by contrast, the
+// game writes in plain name order -- see saveDoc.)
+var HOTKEYS_ORDER = [
+  'FPS', 'Music', 'Sound', 'PTT', 'ChatAllies', 'ChatDefault',
+  'ChatIndividual', 'ChatRecipient', 'MenuAchievements', 'MenuGame', 'AlertRecall', 'ArmySelect',
+  'CameraCenter', 'CameraFollow', 'CameraTurnLeft', 'CameraTurnRight', 'CommanderAbility0', 'CommanderAbility1',
+  'CommanderAbility2', 'CommanderAbility3', 'ControlGroupAppend0', 'ControlGroupAppend1', 'ControlGroupAppend2', 'ControlGroupAppend3',
+  'ControlGroupAppend4', 'ControlGroupAppend5', 'ControlGroupAppend6', 'ControlGroupAppend7', 'ControlGroupAppend8', 'ControlGroupAppend9',
+  'ControlGroupAppendAndSteal0', 'ControlGroupAppendAndSteal1', 'ControlGroupAppendAndSteal2', 'ControlGroupAppendAndSteal3', 'ControlGroupAppendAndSteal4', 'ControlGroupAppendAndSteal5',
+  'ControlGroupAppendAndSteal6', 'ControlGroupAppendAndSteal7', 'ControlGroupAppendAndSteal8', 'ControlGroupAppendAndSteal9', 'ControlGroupAssign0', 'ControlGroupAssign1',
+  'ControlGroupAssign2', 'ControlGroupAssign3', 'ControlGroupAssign4', 'ControlGroupAssign5', 'ControlGroupAssign6', 'ControlGroupAssign7',
+  'ControlGroupAssign8', 'ControlGroupAssign9', 'ControlGroupAssignAndSteal0', 'ControlGroupAssignAndSteal1', 'ControlGroupAssignAndSteal2', 'ControlGroupAssignAndSteal3',
+  'ControlGroupAssignAndSteal4', 'ControlGroupAssignAndSteal5', 'ControlGroupAssignAndSteal6', 'ControlGroupAssignAndSteal7', 'ControlGroupAssignAndSteal8', 'ControlGroupAssignAndSteal9',
+  'ControlGroupRecall0', 'ControlGroupRecall1', 'ControlGroupRecall2', 'ControlGroupRecall3', 'ControlGroupRecall4', 'ControlGroupRecall5',
+  'ControlGroupRecall6', 'ControlGroupRecall7', 'ControlGroupRecall8', 'ControlGroupRecall9', 'GameTooltipsOn', 'IdleWorker',
+  'MinimapColors', 'MinimapPing', 'MinimapTerrain', 'QuickPing', 'QuickSave', 'StatusAll',
+  'StatusOwner', 'StatusAlly', 'StatusEnemy', 'SubgroupNext', 'SubgroupPrev', 'TargetChoose',
+  'TownCamera', 'WarpIn', 'CameraSave0', 'CameraSave1', 'CameraSave2', 'CameraSave3',
+  'CameraSave4', 'CameraSave5', 'CameraSave6', 'CameraSave7', 'CameraView0', 'CameraView1',
+  'CameraView2', 'CameraView3', 'CameraView4', 'CameraView5', 'CameraView6', 'CameraView7'
+];
+var HOTKEYS_RANK = {};
+HOTKEYS_ORDER.forEach(function (n, i) { HOTKEYS_RANK[n] = i; });
+
+// The game orders both sections by the entry name only (the text before '='), NOT the whole
+// "name=value" line. Sorting whole lines misplaces names that are a prefix of another, since '='
+// (0x3D) sorts after '/' (0x2F) and after digits: bare `Foo` would fall behind `Foo/Ctx`, and
+// `Bar@1` behind `Bar@11`. Compare the name column to match the engine.
+function nameOf(line) { var i = line.indexOf('='); return i < 0 ? line : line.slice(0, i); }
+function cmpByName(a, b) { a = nameOf(a); b = nameOf(b); return a < b ? -1 : a > b ? 1 : 0; }
+// [Hotkeys]: canonical enumeration order; any name we don't model sorts after, by name.
+function cmpHotkeyLine(a, b) {
+  var an = nameOf(a), bn = nameOf(b);
+  var ai = HOTKEYS_RANK[an], bi = HOTKEYS_RANK[bn];
+  if (ai == null) ai = HOTKEYS_ORDER.length;
+  if (bi == null) bi = HOTKEYS_ORDER.length;
+  if (ai !== bi) return ai - bi;
+  return an < bn ? -1 : an > bn ? 1 : 0;
+}
+
 // A "binding" is one editable hotkey. It is keyed so that (a) a Universal command is ONE binding
 // shared wherever it appears (edit once, applies everywhere), and (b) within one display group a
 // command carried by several unit-forms (Overlord vs OverlordTransport) is ONE row -- yet it still
@@ -229,6 +305,7 @@ function buildGlobals() {
 function setData(d) {
   DATA = (d && d.units) ? d.units : null;
   ICONS = (d && d.icons) || {};
+  RECOMMENDED = (d && d.recommended) || null;
   TEMPLATES = {}; OCC = []; CTX_LABEL = {}; CARD_MOVES = {}; MODELED_NAMES = {};
   buildGlobals();
   if (!DATA) return;
@@ -271,7 +348,8 @@ function setData(d) {
         var ek = rgroup + '\x00' + key;
         if (emitted[ek]) return; emitted[ek] = 1;                  // one row per binding per group
         OCC.push({ key: key, unit: uid, ctx: rctx, group: rgroup, race: race,
-          kind: u.kind || 'unit', command: command, name: name, slot: b.row * CARD_COLS + b.col });
+          kind: u.kind || 'unit', command: command, resolved: b.shares || command,
+          name: name, slot: b.row * CARD_COLS + b.col });
       });
     });
   });
@@ -294,10 +372,12 @@ function buildDoc(raw, name) {
       if (nm in overrides) { loadedValues[nm] = overrides[nm]; if (loaded == null) loaded = overrides[nm]; }
     });
     var cur = (loaded != null) ? parseKey(loaded) : t.def;
+    var alts = (loaded != null) ? altStr(loaded) : '';
     var bind = {
       id: nextId++, key: key, command: t.command, universal: t.universal, saveNames: t.saveNames,
       code: cur.code, ctrl: cur.ctrl, alt: cur.alt, shift: cur.shift, raw: cur.raw,
       origCode: cur.code, origCtrl: cur.ctrl, origAlt: cur.alt, origShift: cur.shift,
+      alts: alts, origAlts: alts,
       def: t.def, loadedValues: loadedValues
     };
     binds.push(bind);
@@ -309,11 +389,13 @@ function buildDoc(raw, name) {
     var loaded = (g.name in hk) ? hk[g.name] : null;
     var def = parseKey(g.def);
     var cur = (loaded != null) ? parseKey(loaded) : def;
+    var alts = (loaded != null) ? altStr(loaded) : '';
     var bind = {
       id: nextId++, key: 'G|' + g.name, command: null, universal: false, global: true,
       hotkeyName: g.name, saveNames: [],
       code: cur.code, ctrl: cur.ctrl, alt: cur.alt, shift: cur.shift, raw: cur.raw,
       origCode: cur.code, origCtrl: cur.ctrl, origAlt: cur.alt, origShift: cur.shift,
+      alts: alts, origAlts: alts,
       def: def, loadedValues: (loaded != null ? { hk: loaded } : {})
     };
     binds.push(bind);
@@ -326,10 +408,47 @@ function loadFile(file, _prev) {
   return file.text().then(function (text) { return buildDoc(parse(text), null); });
 }
 function loadDefault(_prev) { return Promise.resolve(buildDoc(null, null)); }
+// Start from the bundled recommended layout (HotkeyFiles/RecommendedLayout/, inlined by the
+// generator) -- parse its .SC2Hotkeys text like a loaded file, and name the profile after it.
+function loadRecommended(_prev) {
+  if (!(RECOMMENDED && RECOMMENDED.text)) return Promise.reject(new Error('no bundled recommended layout'));
+  return Promise.resolve(buildDoc(parse(RECOMMENDED.text), RECOMMENDED.name || null));
+}
 
 function edited(b) {
   return !(b.code === b.origCode && !b.ctrl === !b.origCtrl
     && !b.alt === !b.origAlt && !b.shift === !b.origShift);
+}
+function altsChanged(b) { return (b.alts || '') !== (b.origAlts || ''); }
+// A bind's full value string for saving: its (edited) primary key plus any alternate bindings.
+function bindValue(b) {
+  var pk = formatKey(b);
+  if (!b.alts) return pk;
+  return pk ? pk + ',' + b.alts : b.alts;
+}
+
+// Layout conversion beyond each modeled bind's primary key (which page.html's generic remap already
+// handles): the alternate bindings, plus every [Commands]/[Hotkeys] line we don't model (co-op and
+// campaign hotkeys, preserved verbatim otherwise). Ensures the whole file is converted, not just the
+// keys editable on screen. `m` is the same VK remap the layout toggle passes to the generic remap.
+function remapExtra(doc, m) {
+  if (!doc) return 0;
+  var n = 0;
+  doc.binds.forEach(function (b) {
+    if (b.alts) { var r = remapValueStr(b.alts, m); b.alts = r.value; n += r.n; }
+  });
+  var raw = doc.raw;
+  if (raw) {
+    raw.order.forEach(function (nm) {
+      if (MODELED_NAMES[nm]) return;                 // modeled names convert via their bind
+      var r = remapValueStr(raw.commands[nm], m); raw.commands[nm] = r.value; n += r.n;
+    });
+    raw.hotkeysOrder.forEach(function (nm) {
+      if (GLOBAL_NAMES[nm]) return;
+      var r = remapValueStr(raw.hotkeys[nm], m); raw.hotkeys[nm] = r.value; n += r.n;
+    });
+  }
+  return n;
 }
 function saveDoc(doc, name) {
   // .SC2Hotkeys stores only differences from the game default. Each binding writes all the names it
@@ -340,11 +459,15 @@ function saveDoc(doc, name) {
   var emitted = {};
   doc.binds.forEach(function (b) {
     if (b.global) return;                       // globals handled below (they go in [Hotkeys])
-    var e = edited(b);
+    var dirty = edited(b) || altsChanged(b);    // primary rebound, or alternates converted/changed
     b.saveNames.forEach(function (nm) {
       if (emitted[nm]) return;
-      if (e) {
-        if (!sameKey(b, b.def)) { lines.push(nm + '=' + formatKey(b)); emitted[nm] = 1; }
+      if (dirty) {
+        // drop only a binding reverted entirely to its (alternate-less) default
+        if (!sameKey(b, b.def) || b.alts) {
+          var v = bindValue(b);
+          if (v) { lines.push(nm + '=' + v); emitted[nm] = 1; }
+        }
       } else if (nm in b.loadedValues) {
         lines.push(nm + '=' + b.loadedValues[nm]); emitted[nm] = 1;
       }
@@ -355,7 +478,7 @@ function saveDoc(doc, name) {
     if (emitted[nm] || MODELED_NAMES[nm]) return;
     lines.push(nm + '=' + doc.raw.commands[nm]); emitted[nm] = 1;
   });
-  lines.sort();
+  lines.sort(cmpByName);
 
   // [Hotkeys] section: write every bound global (edited -> single key; untouched -> the file's
   // original value verbatim), then preserve any [Hotkeys] name we don't model.
@@ -363,14 +486,15 @@ function saveDoc(doc, name) {
   var hkEmitted = {};
   doc.binds.forEach(function (b) {
     if (!b.global) return;
-    var val = edited(b) ? formatKey(b) : (('hk' in b.loadedValues) ? b.loadedValues.hk : formatKey(b));
+    var dirty = edited(b) || altsChanged(b);
+    var val = dirty ? bindValue(b) : (('hk' in b.loadedValues) ? b.loadedValues.hk : formatKey(b));
     if (val) { hkLines.push(b.hotkeyName + '=' + val); hkEmitted[b.hotkeyName] = 1; }
   });
   if (doc.raw) doc.raw.hotkeysOrder.forEach(function (nm) {
     if (hkEmitted[nm] || GLOBAL_NAMES[nm]) return;
     hkLines.push(nm + '=' + doc.raw.hotkeys[nm]); hkEmitted[nm] = 1;
   });
-  hkLines.sort();
+  hkLines.sort(cmpHotkeyLine);
   var text = unparse(doc.raw, hkLines, lines);
   var fname = (name && name.trim() ? name.trim() : 'Custom') + '.SC2Hotkeys';
   return Promise.resolve({ blob: new Blob([text], { type: 'text/plain' }), filename: fname,
@@ -386,19 +510,19 @@ function bindings(doc) {
   if (!DATA) {                                  // dev / no dataset: flat list by raw name
     return doc.binds.map(function (b) {
       return { e: b, id: b.id, unit: null, ctx: '', name: b.name, group: 'Hotkeys',
-        slot: null, command: b.command, hidden: false, chron: false };
+        slot: null, command: b.command, hidden: false, campaign: false };
     });
   }
   var recs = [];
   OCC.forEach(function (o) {
     var b = doc.byKey[o.key]; if (!b) return;
     recs.push({ e: b, id: b.id, unit: o.unit, ctx: o.ctx, race: o.race, kind: o.kind, name: o.name,
-      group: o.group, slot: o.slot, command: o.command, hidden: false, chron: false });
+      group: o.group, slot: o.slot, command: o.command, resolved: o.resolved, hidden: false, campaign: false });
   });
   GLOBALS.forEach(function (g) {
     var b = doc.byKey['G|' + g.name]; if (!b) return;
     recs.push({ e: b, id: b.id, unit: null, ctx: 'global', race: null, name: g.label,
-      group: g.group, slot: null, command: null, global: true, hidden: false, chron: false });
+      group: g.group, slot: null, command: null, global: true, hidden: false, campaign: false });
   });
   // Alphabetical within each group (the engine keeps this order per group; groups are re-sorted by
   // groupKey at render time).
@@ -421,6 +545,10 @@ function ctxLabel(ctx) { return CTX_LABEL[ctx] || ''; }
 // morph and its reverse), is not a conflict.
 function classify(ra, rb) {
   var A = ra.ctx, B = rb.ctx;
+  // Two records that resolve to the SAME underlying game hotkey are one hotkey to the engine and
+  // never conflict -- e.g. the Oracle's Pulsar-beam attack (OracleAttack) reuses Attack's hotkey, so
+  // sharing a key with the movement Attack is by design, not a clash.
+  if (ra.resolved && rb.resolved && ra.resolved === rb.resolved) return null;
   if (A === 'unitcmd' && B === 'unitcmd') return { sev: 'confirmed' };     // same shared card
   if (A === 'unitcmd' || B === 'unitcmd') {
     var mv = A === 'unitcmd' ? ra : rb, other = A === 'unitcmd' ? rb : ra;
@@ -478,7 +606,6 @@ GAMES.starcraft2 = {
     fileAccept: '.SC2Hotkeys',
     multiple: false,
     usesProfileName: true,          // download is named <profile>.SC2Hotkeys
-    hasChroniclesToggle: false,
     cardCols: CARD_COLS, cardRows: CARD_ROWS,
     pathHelp:
       '<div class="helpsubhead">To get started</div>'
@@ -493,12 +620,14 @@ GAMES.starcraft2 = {
     applyNote: 'Save the .SC2Hotkeys file into Documents\\StarCraft II\\Hotkeys, then select it '
       + 'in the game\'s Hotkeys options.'
   },
-  codec: { load: loadFile, loadDefault: loadDefault, save: saveDoc, parse: parse, unparse: unparse },
+  codec: { load: loadFile, loadDefault: loadDefault, loadRecommended: loadRecommended, save: saveDoc, parse: parse, unparse: unparse },
   input: { vkLabels: {}, mouseButtons: [] },
   setData: setData,
+  hasRecommended: function () { return !!(RECOMMENDED && RECOMMENDED.text); },  // gate the "try my layout" box on a bundled layout
   fileStatus: fileStatus,
   bindings: bindings,
   forEachEntry: forEachEntry,
+  remapExtra: remapExtra,        // convert alternates + unmodeled [Commands]/[Hotkeys] on a layout switch
   groupOf: groupOf,
   context: context,
   classify: classify,

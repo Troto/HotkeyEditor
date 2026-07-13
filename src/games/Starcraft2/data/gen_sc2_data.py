@@ -148,8 +148,9 @@ def load_buttondata():
 
 
 def resolve_command(face, buttons, _seen=None):
-    """Follow the HotkeyAlias/Hotkey chain from a Face button id to its root
-    hotkey command id. Falls back to the face id itself."""
+    """Follow the HotkeyAlias/Hotkey chain from a Face button id to its root hotkey command id --
+    used to find the DEFAULT KEY (which lives under the root's Button/Hotkey entry). Falls back to
+    the face id itself."""
     if _seen is None:
         _seen = set()
     if face in _seen:
@@ -160,6 +161,27 @@ def resolve_command(face, buttons, _seen=None):
         nxt = rec.get("alias") or rec.get("hotkey")
         if nxt and nxt != face:
             return resolve_command(nxt, buttons, _seen)
+    return face
+
+
+def resolve_command_name(face, buttons, _seen=None):
+    """The command id the game writes to a .SC2Hotkeys line: follow ONLY the explicit HotkeyAlias
+    (a genuine "share this hotkey entry" link), NOT the plain Hotkey field. Hotkey is merely the
+    default-key *reference*, and a reworked LotV button often reuses an older button's default (LotV
+    Raven `ResearchRavenInterferenceMatrix` reuses removed `ResearchRavenEnergyUpgrade`/Corvid
+    Reactor's; the Oracle's Pulsar-beam `OracleAttack` reuses `Attack`'s). Following Hotkey there
+    would mis-name the live button as the dead one (Corvid) or silently fold two separately-bindable
+    hotkeys into one (OracleAttack into Attack). The game keys those lines by Face id, so we do too."""
+    if _seen is None:
+        _seen = set()
+    if face in _seen:
+        return face
+    _seen.add(face)
+    rec = buttons.get(face)
+    if rec:
+        nxt = rec.get("alias")
+        if nxt and nxt != face:
+            return resolve_command_name(nxt, buttons, _seen)
     return face
 
 
@@ -455,6 +477,42 @@ def base_unit_id(uid):
     return uid
 
 
+# A handful of transform-state units are NOT their own hotkey subgroup in-game: the game files
+# their command-card buttons under the BASE unit, so a `.SC2Hotkeys` file only ever writes e.g.
+# `MorphtoObserver/Observer`, never `/ObserverSiegeMode`.  (This is unlike burrowed units such as
+# InfestorBurrowed, which the game DOES qualify by their own id -- and even binds independently:
+# `NeuralParasite/Infestor` vs `/InfestorBurrowed` can differ -- so those stay separate.)  For the
+# LotV Observer "Surveillance Mode" and Overseer "Oversight Mode" toggles we adopt the base unit's
+# qualifier and display name, so the return-morph buttons load correctly and fold into the base
+# unit's group instead of appearing as a phantom "(Siege Mode)" duplicate.
+# A few command-card buttons keep a legacy (WoL-campaign) Face id whose own Button/Hotkey entry is
+# dead in current multiplayer -- the live game binds them through their ability's UNIVERSAL hotkey
+# instead. The Bunker's rally button is Face "SetBunkerRallyPoint" but AbilCmd "Rally,Rally1", so the
+# game (and jcfieldsdev's editor) name it the universal "Rally"; writing `SetBunkerRallyPoint/Bunker`
+# leaves it unbound in-game. Remap the Face to the id the game actually keys on before resolving.
+BUTTON_ALIAS = {
+    "SetBunkerRallyPoint": "Rally",
+}
+
+# A campaign/co-op button that rides the MP dependency chain (base cards live in liberty/swarm/void,
+# so those campaign mods are required -- but they also carry campaign-only buttons that leak onto MP
+# cards). SummonNydusCanalCreeper is a swarm/void CO-OP Nydus variant (`BuildNydusCanal,Build3`) with
+# NO Button/Hotkey entry in ANY mod, so the game can't surface it as a bindable command; the real MP
+# Nydus command on that card is SummonNydusWorm. (Do NOT add buttons here that DO have a Button/Hotkey
+# entry -- the game shows those in its editor, so dropping them leaves the player an unbound row, e.g.
+# the WarpGate's UpgradeToWarpGate and the Barracks Tech Lab's ReaperSpeed both have real hotkeys.)
+BUTTON_DENYLIST = {"SummonNydusCanalCreeper"}
+
+FOLD_INTO_BASE = {
+    "ObserverSiegeMode": "Observer",
+    "OverseerSiegeMode": "Overseer",
+    # ThorAP is the Thor's "High Impact Payload" weapon-mode state; its card carries the toggle-back
+    # `ExplosiveMode` (Explosive Payload) button. The base Thor holds the forward toggle
+    # (ArmorpiercingMode). Folding puts both payload toggles under the one editable "Thor".
+    "ThorAP": "Thor",
+}
+
+
 def load_melee():
     """The jcfieldsdev ladder roster (data/sc2_melee.json, from gen_sc2_melee.js): melee unit
     display-names and caster-ids. None if absent -- the melee flag then defaults to True."""
@@ -486,7 +544,7 @@ def build():
             continue
         if "test" in uid.lower():
             continue  # internal debug units (AutoTest*, ScopeTest, TestZerg)
-        qualifier = unit["fields"].get("SubgroupAlias", uid)
+        qualifier = FOLD_INTO_BASE.get(uid) or unit["fields"].get("SubgroupAlias", uid)
         race = race_name(unit["fields"].get("Race"))
 
         # A sub-card (CardId) is named by the sub-menu button that opens it (SubmenuCardId), so the
@@ -502,7 +560,11 @@ def build():
         # (its own id or SubgroupAlias hosts melee commands, incl. add-ons like FactoryTechLab), by
         # display name (covers ability-less units like Archon/Colossus that own no command), or if
         # it owns a specific melee command (keeps state-variants like a flying building's Land).
-        if melee is None:
+        if melee is None or uid in FOLD_INTO_BASE:
+            # A folded unit IS its base unit in another mode (Thor's payload state, Observer's
+            # surveillance mode); it inherits the base's ladder status, so never let the melee
+            # heuristic drop it (e.g. ThorAP wasn't in jcfieldsdev's roster and was being filtered,
+            # hiding Explosive Payload entirely).
             is_melee = True
         else:
             is_melee = (uid in melee["qualifiers"] or qualifier in melee["qualifiers"]
@@ -517,13 +579,23 @@ def build():
             for attrs in dedup_faces(slots):
                 if attrs.get("Type") in SKIP_TYPES:
                     continue
-                face = attrs.get("Face")
-                command = resolve_command(face, buttons)
+                if attrs.get("Face") in BUTTON_DENYLIST:
+                    continue                         # campaign/co-op leak, not an MP command
+                # A bare Face with neither a Type NOR an AbilCmd is a passive indicator, not a
+                # command (the Observer's detector-eye icon). Buttons that have an AbilCmd, or any
+                # Type, are kept -- including AbilCmd-less-but-real ones the game still binds by their
+                # own hotkey (the Gateway/WarpGate `UpgradeToWarpGate` morph). Do NOT broaden this to
+                # "no AbilCmd": that wrongly dropped UpgradeToWarpGate/WarpGate, which the game binds.
+                if attrs.get("Type") is None and not attrs.get("AbilCmd"):
+                    continue
+                face = BUTTON_ALIAS.get(attrs.get("Face"), attrs.get("Face"))  # legacy face -> live id
+                command = resolve_command_name(face, buttons)    # save-name/display (HotkeyAlias only)
+                key_command = resolve_command(face, buttons)     # default-key id (full Hotkey chain)
                 if command == "Move":
                     has_move = True
                 brec = buttons.get(command, {})
                 universal = bool(brec.get("universal"))
-                key = hotkeys.get(command, "")
+                key = hotkeys.get(key_command, "")
                 row, col = grid_position(attrs)
                 out_name = command if universal else command + "/" + qualifier
                 if key:
@@ -534,7 +606,7 @@ def build():
                 if (melee is not None and not is_melee and not universal
                         and command not in GENERIC_COMMANDS and out_name in melee["commands"]):
                     is_melee = True
-                card_buttons.append({
+                btn = {
                     "face": face,
                     "command": command,
                     "name": display_name(command, strings),
@@ -545,7 +617,14 @@ def build():
                     "type": attrs.get("Type"),
                     "submenu": attrs.get("SubmenuCardId"),
                     "icon": brec.get("icon"),
-                })
+                }
+                # The game scopes conflicts by the *resolved* hotkey (full Hotkey chain), even where
+                # the save-name is the Face. So a button that merely reuses another's default hotkey
+                # (OracleAttack -> Attack) shares that hotkey's conflict identity and must never clash
+                # with it. Record the underlying id when it differs so the module can dedupe conflicts.
+                if key_command != command:
+                    btn["shares"] = key_command
+                card_buttons.append(btn)
             if card_buttons:
                 label = "" if ckey.startswith("@") else submenu_label.get(ckey, "Submenu")
                 unit_cards.append({"id": ckey, "label": label, "buttons": card_buttons})
@@ -560,7 +639,7 @@ def build():
             # unit vs building: jcfieldsdev's type (by name / caster id / base id), else mobility
             # (a unit with a Move command is mobile -> a unit; otherwise a structure).
             types = melee["types"] if melee else {}
-            uname = unit_display_name(uid, strings)
+            uname = unit_display_name(FOLD_INTO_BASE.get(uid, uid), strings)
             kind = (types.get(uname) or types.get(uid) or types.get(qualifier)
                     or types.get(base_unit_id(uid)) or ("unit" if has_move else "building"))
             units_out[uid] = {

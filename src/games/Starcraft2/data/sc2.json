@@ -2952,15 +2952,15 @@
       },
       {
        "col": 4,
-       "command": "SetBunkerRallyPoint",
-       "face": "SetBunkerRallyPoint",
+       "command": "Rally",
+       "face": "Rally",
        "icon": "Assets\\Textures\\btn-ability-terran-setrallypoint.dds",
        "key": "Y",
-       "name": "Set Bunker Rally Point",
+       "name": "Set Rally Point",
        "row": 1,
        "submenu": null,
        "type": "AbilCmd",
-       "universal": false
+       "universal": true
       },
       {
        "col": 1,
@@ -13762,18 +13762,6 @@
        "submenu": null,
        "type": "AbilCmd",
        "universal": true
-      },
-      {
-       "col": 2,
-       "command": "SummonNydusCanalCreeper",
-       "face": "SummonNydusCanalCreeper",
-       "icon": "Assets\\Textures\\btn-building-zerg-creeptumor.dds",
-       "key": "",
-       "name": "Summon Creep Tower",
-       "row": 1,
-       "submenu": null,
-       "type": "AbilCmd",
-       "universal": false
       }
      ],
      "id": "@0",
@@ -13966,18 +13954,6 @@
        "universal": true
       },
       {
-       "col": 3,
-       "command": "Detector",
-       "face": "Detector",
-       "icon": "Assets\\Textures\\BTN-Status-Detector.dds",
-       "key": "",
-       "name": "Detector",
-       "row": 0,
-       "submenu": null,
-       "type": null,
-       "universal": false
-      },
-      {
        "col": 1,
        "command": "MorphtoObserver",
        "face": "MorphtoObserver",
@@ -14009,9 +13985,9 @@
    "id": "ObserverSiegeMode",
    "kind": "unit",
    "melee": true,
-   "name": "Observer (Siege Mode)",
+   "name": "Observer",
    "playable": true,
-   "qualifier": "ObserverSiegeMode",
+   "qualifier": "Observer",
    "race": "Protoss"
   },
   "Oracle": {
@@ -14068,12 +14044,13 @@
       },
       {
        "col": 4,
-       "command": "Attack",
+       "command": "OracleAttack",
        "face": "OracleAttack",
        "icon": "Assets\\Textures\\btn-command-attack.dds",
        "key": "A",
        "name": "Attack",
        "row": 0,
+       "shares": "Attack",
        "submenu": null,
        "type": "AbilCmd",
        "universal": true
@@ -15081,7 +15058,7 @@
    "melee": true,
    "name": "Overseer",
    "playable": true,
-   "qualifier": "OverseerSiegeMode",
+   "qualifier": "Overseer",
    "race": "Zerg"
   },
   "ParasiticBombRelayDummy": {
@@ -22315,12 +22292,13 @@
       },
       {
        "col": 2,
-       "command": "ResearchRavenEnergyUpgrade",
+       "command": "ResearchRavenInterferenceMatrix",
        "face": "ResearchRavenInterferenceMatrix",
-       "icon": "Assets\\Textures\\btn-upgrade-terran-corvidreactor.dds",
+       "icon": "Assets\\Textures\\btn-upgrade-terran-interferencematrix.dds",
        "key": "T",
-       "name": "Research Corvid Reactor",
+       "name": "Research Interference Matrix",
        "row": 0,
+       "shares": "ResearchRavenEnergyUpgrade",
        "submenu": null,
        "type": "AbilCmd",
        "universal": false
@@ -23293,8 +23271,8 @@
    ],
    "id": "ThorAP",
    "kind": "unit",
-   "melee": false,
-   "name": "ThorAP",
+   "melee": true,
+   "name": "Thor",
    "playable": true,
    "qualifier": "Thor",
    "race": "Terran"

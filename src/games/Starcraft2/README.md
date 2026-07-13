@@ -75,6 +75,11 @@ binding), this module:
 - **`data/icons/*.png`** — the ability icons, converted from the game's `.dds` textures.
 - **`data/sc2_defaults.ini`** — flat `command[/unit]=key` dump; a build artifact used only to
   validate the generator against the reference project.
+- **`HotkeyFiles/`** — sample `.SC2Hotkeys` profiles. `RecommendedLayout/` holds an optional
+  bundled "recommended" profile: `--build` inlines the single `.SC2Hotkeys` there (verbatim INI
+  text) for the **"try my layout"** box (module `loadRecommended`, gated on `hasRecommended()`);
+  an empty/absent folder hides the box. (There is no default *file* — SC2's defaults are built in,
+  so **Load defaults** starts from the dataset, not a bundled file.)
 
 ## Regenerating the dataset
 

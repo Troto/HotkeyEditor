@@ -71,7 +71,9 @@ http://localhost:8765/site/aoe2/index.html (or `site/index.html` for the launche
 - **Auto-sized keyboard region.** The sticky header (`#kbwrap`) is a three-column
   `.kbstage` grid: a capped-width left column (`.kbside`), the centred keyboard (`.kb`), and
   the command-card panel (`.cardpanel`). The left column stacks, top-to-bottom: the checkbox
-  options (`.kbtools`, laid out side by side — shade, show instructions, show Chronicles, and
+  options (`.kbtools`, laid out side by side — shade, show instructions, **show campaign** — the
+  game-agnostic toggle that reveals campaign-only commands (AoE2 Chronicles, WC3 campaign
+  units/items), auto-shown only when the loaded profile has any — and
   **show numpad / show nav keys**, both off by default so the `.kbsec-num` / `.kbsec-nav` blocks
   start hidden and the rest of the keyboard scales up larger), the **hide-conflicts** option
   (`.conflicttools`), the **conflict panel** — which
@@ -152,9 +154,18 @@ A game module supplies, behind a small interface:
   file. The engine assumes nothing about the format. Optionally a codec may also expose
   `loadDefault(prevDoc) → doc` to build a doc from a **bundled default file** (the module inlines
   the file text via its dataset); when present alongside `meta.defaultsLabel`, the shell shows a
-  one-click "load defaults" button so a user can start without picking a file.
+  one-click "load defaults" button so a user can start without picking a file. Similarly a codec
+  may expose `loadRecommended(prevDoc) → doc` for a **bundled "recommended" layout** (inlined by
+  the generator from that game's `HotkeyFiles/RecommendedLayout/`); the shell shows the "try my
+  layout" box when the codec has `loadRecommended` **and** the game's optional
+  `GAME.hasRecommended() → bool` reports a layout is bundled (so an empty `RecommendedLayout/`
+  folder simply hides the box).
 - **bindings / forEachEntry** — `bindings(doc) → [rec]` turns the doc into the engine's editable
-  records; `forEachEntry(doc, fn)` iterates the raw entries (used by the Dvorak remap).
+  records; `forEachEntry(doc, fn)` iterates the raw entries (used by the Dvorak remap). A rec may
+  carry two engine-recognised flags: `hidden` (always dropped from the list, still saved) and
+  `campaign` (campaign-only content — e.g. AoE2 Chronicles, WC3 campaign units/items — dropped
+  unless the **Show Campaign** toggle is on; the toggle auto-appears only when some loaded rec has
+  it). Both default falsy, so a game that sets neither gets the plain full list.
 - **fileStatus** — `fileStatus(doc, name) → html` for the toolbar's load-status chips (the game
   decides what "loaded / still need to load" looks like).
 - **dataset** — the inlined data: command id → name, display grouping, and conflict context.
@@ -196,7 +207,7 @@ A game module supplies, behind a small interface:
   repaint immediately and (b) queue the file writeback, applied at save. WC3 supplies it (writes
   `Buttonpos`); AoE2 omits it, so its card is read-only apart from click-to-rebind.
 - **meta** — display name, file label/accept, load/save help copy, and flags
-  (`multiple`, `usesProfileName`, `hasChroniclesToggle`, and optional `defaultsLabel` for the
+  (`multiple`, `usesProfileName`, `hasGlobalOverlapToggle`, and optional `defaultsLabel` for the
   "load defaults" button, …). The engine's `applyMeta()` paints this copy into the shell so
   `page.html` carries no game-specific text.
 

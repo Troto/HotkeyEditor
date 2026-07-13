@@ -297,6 +297,32 @@
             text-decoration: underline;
         }
 
+        /* "Load the author's recommended layout" box (button + copy), shown only when the
+           active game bundles a layout */
+        .reccorner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .recbtn {
+            font: inherit;
+            font-size: 12px;
+            background: #1c2331;
+            color: #cfe0ff;
+            border: 1px solid #3a4150;
+            border-radius: 5px;
+            padding: 3px 9px;
+            cursor: pointer;
+        }
+
+        .recbtn:hover {
+            background: #232c3d;
+            border-color: #4a5468;
+        }
+
         h1 {
             margin: 0 0 8px;
             font-size: 17px;
@@ -835,6 +861,30 @@
             box-shadow: inset 0 0 0 3px var(--sev-override);
         }
 
+        /* floating tooltip that follows the cursor over a drop-target key during a drag, listing the
+     conflicts the dragged command would land in (native drag suppresses the browser `title`, so we
+     draw our own). Shown only while a key with anticipated clashes is under the cursor. */
+        .dragtip {
+            position: fixed;
+            z-index: 120;
+            display: none;
+            pointer-events: none;
+            max-width: 320px;
+            padding: 6px 9px;
+            border-radius: 6px;
+            background: rgba(10, 12, 18, .96);
+            border: 1px solid rgba(255, 255, 255, .16);
+            box-shadow: 0 6px 20px rgba(0, 0, 0, .5);
+            color: #e8ecf2;
+            font-size: 12px;
+            line-height: 1.4;
+            white-space: pre-line;
+        }
+
+        .dragtip.show {
+            display: block;
+        }
+
         /* a key showing a command icon acts like a card slot: draggable (to move the bind to another
      key) and click-to-rebind. The others below mirror the .cardslot drag/capture cues. */
         .kbkey.kbicon {
@@ -1205,7 +1255,7 @@
         }
 
         .hdrleft {
-            flex: 0 1 auto;
+            flex: 1 1 auto;
             min-width: 0;
         }
 
@@ -1911,6 +1961,11 @@
             <div class="hint" id="hint"></div>
             <div class="sub dlnote" id="applyNote" style="margin-top:4px"></div>
         </div>
+        <div id="recommendedBox" class="reccorner" style="display:none">
+            <span style="font-size: 16px">Want to try my layout?</span>
+            <button id="loadRecommended" type="button" class="recbtn">Load My Layout</button>
+            <span class="ghnote" style="max-width: 180px">Ergonomic and performant</span>
+        </div>
     </div>
     <div class="hdrbind">
         <div class="hdrhelp">
@@ -2075,15 +2130,18 @@
                     <label class="tg"
                            title="Draw each command's ability art on its key (and on the command-card grid). Off shows the plain highlighted keys with their letters instead."><input
                             type="checkbox" id="showIconsToggle" checked autocomplete="off"> Show icons</label>
-                    <label class="tg" id="chronWrap" style="display:none"
-                           title="Show the hidden Chronicles (Battle for Greece) commands in the list. They're kept in saved files either way."><input
-                            type="checkbox" id="chronToggle" autocomplete="off"> Show Chronicles</label>
+                    <label class="tg" id="campaignWrap" style="display:none"
+                           title="Show campaign-only commands in the list (e.g. AoE2 Chronicles, WC3 campaign units/items). They're kept in saved files either way."><input
+                            type="checkbox" id="campaignToggle" autocomplete="off"> Show Campaign</label>
                     <label class="tg"
                            title="Show the number-pad block of the on-screen keyboard. Off by default so the rest of the keyboard is larger."><input
                             type="checkbox" id="showNumpadToggle" autocomplete="off"> Show numpad</label>
                     <label class="tg"
                            title="Show the navigation/arrow block (Ins/Home/PgUp … arrow keys) of the on-screen keyboard. Off by default so the rest of the keyboard is larger."><input
                             type="checkbox" id="showNavToggle" autocomplete="off"> Show nav keys</label>
+                    <label class="tg" id="globalOverlapWrap" style="display:none"
+                           title="Off (default): a global command (control groups, go-to, select-all, camera/zoom, chat) that shares a key with a card or selection command is treated as a hard conflict, since globals fire regardless of what's selected. On: allow the overlap — the active card/selection shadows the global, so the pair is shown as a caution (blue ⓘ), not a conflict."><input
+                            type="checkbox" id="globalOverlapToggle" autocomplete="off"> Allow global &amp; local overlap</label>
                 </div>
                 <aside class="cpanel" id="conflictpanel">
                     <div class="cphead">
@@ -2139,8 +2197,9 @@
     let showIcons = true;        // "Show icons": draw ability art on keys + card grid (default on)
     let preferKbBinds = true;    // normal (keyboard) mode, the default: headings select (not collapse); no-icon commands show text on their key. The "Advanced Bind" switch is inverted — unchecked = normal, checked = Advanced Bind.
     let layout = 'qwerty';       // 'qwerty' | 'dvorak' — drives keybind conversion + key labels
-    let hideChronicles = true;   // Chronicles is a separate mode; hidden by default
-    let hasChron = false;        // whether the loaded profile contains any Chronicles content
+    let hideCampaign = true;     // campaign-only commands (e.g. AoE2 Chronicles, WC3 campaign content) are hidden by default
+    let allowGlobalOverlap = false; // "Allow global & local overlap": off = global-vs-local is a hard conflict; on = override caution (passed to GAME.classify)
+    let hasCampaign = false;     // whether the loaded profile contains any campaign-only content
     const collapsed = new Set(); // collapsed group names (request 3)
 
     // ---- virtual-key code -> label ----
@@ -2234,10 +2293,10 @@
     let listFilter = null;         // active GAME.filters id (e.g. a WC3 race), or null = all
     function buildModel() {
         const full = GAME.bindings(state.doc).filter(r => !r.hidden);   // always drop hidden cmds (kept in state for saving)
-        hasChron = full.some(r => r.chron);
-        allRecs = hideChronicles ? full.filter(r => !r.chron) : full;   // chronicles entries also stay in state
-        const cw = document.getElementById('chronWrap');
-        if (cw) cw.style.display = hasChron ? '' : 'none';
+        hasCampaign = full.some(r => r.campaign);
+        allRecs = hideCampaign ? full.filter(r => !r.campaign) : full;   // campaign entries also stay in state
+        const cw = document.getElementById('campaignWrap');
+        if (cw) cw.style.display = hasCampaign ? '' : 'none';
         recsById = new Map();
         allRecs.forEach(r => {
             if (!recsById.has(r.id)) recsById.set(r.id, []);
@@ -2344,7 +2403,7 @@
             for (let a = 0; a < recs.length; a++) for (let b = a + 1; b < recs.length; b++) {
                 const ra = recs[a], rb = recs[b];
                 if (ra.id === rb.id) continue;
-                const res = GAME.classify(ra, rb);
+                const res = GAME.classify(ra, rb, {globalOverlap: allowGlobalOverlap});
                 if (!res) continue;
                 add(ra, rb, res.sev, res.civs, res.note);
                 add(rb, ra, res.sev, res.civs, res.note);
@@ -2383,17 +2442,21 @@
             : (a.sev === 'confirmed' ? -1 : 1));
     }
 
-    function conflictTip(r) {
+    // one line describing a single {other, sev, civs, note} clash — shared by the conflict panel
+    // tooltip and the rebind/drag preview tooltip so they read identically.
+    function conflictLine(c) {
         const lead = {
             confirmed: 'Conflict',
             possible: 'Possible clash',
             override: 'Caution: card overrides this global'
         };
-        return (conflictByRec.get(r) || []).map(c => c.note
+        return c.note
             ? ('Note: ' + GAME.recName(c.other) + ' — ' + c.note)
             : (lead[c.sev] + ': ' + GAME.recName(c.other)
-                + (c.civs ? (' (' + c.civs.length + ' civ' + (c.civs.length > 1 ? 's' : '') + ')') : ''))
-        ).join('\n');
+                + (c.civs ? (' (' + c.civs.length + ' civ' + (c.civs.length > 1 ? 's' : '') + ')') : ''));
+    }
+    function conflictTip(r) {
+        return (conflictByRec.get(r) || []).map(conflictLine).join('\n');
     }
 
     function updateConflictBadge() {
@@ -2676,11 +2739,12 @@
     // combo (any base key + the currently-armed modifiers) we ask the game whether the command being
     // rebound would clash with each EXISTING binding carrying that same modifier set; the key holding
     // that binding is flagged with the highest resulting severity.
-    let rebindKeySev = new Map();     // 'k'+code -> highest would-be severity while a rebind is pending
+    let rebindKeySev = new Map();     // 'k'+code -> {sev, items:[…]} of would-be clashes while a rebind is pending
     // Given a list of subjects being (re)bound, each as {rec, ctrl, alt, shift} (the modifiers it would
-    // land with), return a Map of candidate base-key id -> worst would-be severity.  classify() depends
+    // land with), return a Map of candidate base-key id -> {sev, items}: the worst would-be severity and
+    // the list of {other, sev, civs, note} clashes to list in the preview tooltip.  classify() depends
     // only on the two records, so a base key is flagged when some existing bind carrying the subject's
-    // modifiers would clash with it -> union the worst sev across all subjects.
+    // modifiers would clash with it -> union across all subjects (deduped by the existing binding).
     function computeRebindSev(subjects) {
         const m = new Map();
         if (!subjects || !dataReady || !GAME.classify) return m;
@@ -2691,10 +2755,16 @@
                 if (!e.code) return;
                 if (other === rec || other.id === rec.id) return;                        // never clashes with itself / its own alt binds
                 if ((e.ctrl ? 1 : 0) !== sc || (e.alt ? 1 : 0) !== sa || (e.shift ? 1 : 0) !== ss) return; // only binds sharing this subject's modifiers
-                const res = GAME.classify(rec, other);
+                const res = GAME.classify(rec, other, {globalOverlap: allowGlobalOverlap});
                 if (!res) return;
                 const id = 'k' + e.code;
-                if (sevRank(res.sev) > sevRank(m.get(id))) m.set(id, res.sev);
+                let cur = m.get(id);
+                if (!cur) { cur = {sev: res.sev, items: [], seen: new Set()}; m.set(id, cur); }
+                if (sevRank(res.sev) > sevRank(cur.sev)) cur.sev = res.sev;
+                if (!cur.seen.has(other)) {              // a second dragged subject may hit the same bind -> list once
+                    cur.seen.add(other);
+                    cur.items.push({other: other, sev: res.sev, civs: res.civs || null, note: res.note || null});
+                }
             });
         });
         return m;
@@ -2726,17 +2796,64 @@
     // the same would-be-clash preview on the keyboard (scoped to body.rebinding in CSS).
     function paintRebindPreview() {
         document.querySelectorAll('.kbkey.wclash-confirmed,.kbkey.wclash-possible,.kbkey.wclash-override')
-            .forEach(el => el.classList.remove('wclash-confirmed', 'wclash-possible', 'wclash-override'));
+            .forEach(el => { el.classList.remove('wclash-confirmed', 'wclash-possible', 'wclash-override'); restoreRebindTitle(el); });
         const subjects = capture ? captureSubjects() : (kbDragStack ? dragSubjects() : null);
         document.body.classList.toggle('rebinding', !!subjects);
-        if (!subjects) return;
+        if (!subjects) { hideDragTip(); return; }
         rebindKeySev = computeRebindSev(subjects);
-        rebindKeySev.forEach((sev, id) => {
+        rebindKeySev.forEach((info, id) => {
+            const tip = info.items.map(conflictLine).join('\n');
             (keyEls[id] || []).forEach(el => {
                 if (el.classList.contains('capturing') || el.classList.contains('dragging')) return;  // leave the target/source key alone
-                el.classList.add('wclash-' + sev);
+                el.classList.add('wclash-' + info.sev);
+                setRebindTitle(el, tip);   // hover tooltip for a click-capture (a native drag suppresses it -> dragTip covers that)
             });
         });
+    }
+
+    // Override a key's tooltip with the would-be-clash list during a rebind, remembering its normal
+    // title (set by renderKeyTile) so we can put it back when the preview clears.
+    function setRebindTitle(el, tip) {
+        if (el._rebindTitle === undefined) el._rebindTitle = el.getAttribute('title');
+        el.title = tip;
+    }
+    function restoreRebindTitle(el) {
+        if (el._rebindTitle === undefined) return;
+        if (el._rebindTitle === null) el.removeAttribute('title'); else el.title = el._rebindTitle;
+        delete el._rebindTitle;
+    }
+    // renderKeyTile sets a key's normal tooltip; if a rebind preview currently owns the live title,
+    // update the remembered base instead so restoreRebindTitle puts back the fresh value.
+    function setKeyBaseTitle(el, t) {
+        if (el._rebindTitle !== undefined) el._rebindTitle = t;
+        else el.title = t;
+    }
+
+    // Cursor-following tooltip listing a drop-target key's anticipated clashes during a native drag
+    // (which suppresses the browser `title`).  Fed from rebindKeySev on dragover; hidden on leave/end.
+    let dragTipEl = null;
+    function dragTip() {
+        if (!dragTipEl) {
+            dragTipEl = document.createElement('div');
+            dragTipEl.className = 'dragtip';
+            document.body.appendChild(dragTipEl);
+        }
+        return dragTipEl;
+    }
+    function showDragTip(text, x, y) {
+        if (!text) { hideDragTip(); return; }
+        const el = dragTip();
+        el.textContent = text;
+        el.classList.add('show');
+        const vw = window.innerWidth, vh = window.innerHeight, r = el.getBoundingClientRect();
+        let nx = x + 14, ny = y + 16;                      // offset from the cursor
+        if (nx + r.width > vw - 6) nx = x - r.width - 14;  // flip left if it would overflow
+        if (ny + r.height > vh - 6) ny = y - r.height - 16;// flip above if it would overflow
+        el.style.left = Math.max(6, nx) + 'px';
+        el.style.top = Math.max(6, ny) + 'px';
+    }
+    function hideDragTip() {
+        if (dragTipEl) dragTipEl.classList.remove('show');
     }
 
     // ---- highlighting (keyboard <-> list) ----
@@ -2830,11 +2947,11 @@
                 setCardHoverName(iconHoverText(el));
             };
             el.appendChild(b);
-            el.title = stack.map((r, i) => (i === idx ? '▶ ' : '   ') + GAME.recName(r) + ' — ' + comboLabel(r.e)).join('\n')
-                + '\n(badge cycles; click rebinds the ▶ one, drag moves it)';
+            setKeyBaseTitle(el, stack.map((r, i) => (i === idx ? '▶ ' : '   ') + GAME.recName(r) + ' — ' + comboLabel(r.e)).join('\n')
+                + '\n(badge cycles; click rebinds the ▶ one, drag moves it)');
         } else {
             el.classList.remove('kbstack');
-            el.title = GAME.recName(rec) + ' — ' + comboLabel(rec.e) + '\n(click to rebind, drag to another key to move)';
+            setKeyBaseTitle(el, GAME.recName(rec) + ' — ' + comboLabel(rec.e) + '\n(click to rebind, drag to another key to move)');
         }
     }
 
@@ -3166,11 +3283,14 @@
             ev.preventDefault();
             ev.dataTransfer.dropEffect = 'move';
             el.classList.add('dropok');
+            const info = rebindKeySev.get(id);   // anticipated clashes if the dragged stack landed here
+            showDragTip(info ? info.items.map(conflictLine).join('\n') : '', ev.clientX, ev.clientY);
         });
-        el.addEventListener('dragleave', () => el.classList.remove('dropok'));
+        el.addEventListener('dragleave', () => { el.classList.remove('dropok'); hideDragTip(); });
         el.addEventListener('drop', ev => {
             ev.preventDefault();
             el.classList.remove('dropok');
+            hideDragTip();
             if (!kbDragStack) return;
             const from = kbDragStack;
             kbDragStack = null;
@@ -3686,9 +3806,13 @@
         // so you can spot a landing key clean for the whole building — while the commit still moves only
         // `rec` (row/card captures have no stack element -> just [rec]).
         const stack = (el && el._iconStack && el._iconStack.length) ? el._iconStack.slice() : [rec];
-        capture = {rec, el, label, kind, stack, mods: {ctrl: 0, alt: 0, shift: 0}};   // mods = click-armed modifiers
+        // pre-arm the command's current modifiers so a rebind keeps them by default (e.g. clicking the
+        // Ctrl+A member of a stack starts armed with Ctrl -> pressing B lands on Ctrl+B, not plain B).
+        // Toggle any off via the on-screen modifier keys before pressing the new base key.
+        capture = {rec, el, label, kind, stack,
+            mods: {ctrl: rec.e.ctrl ? 1 : 0, alt: rec.e.alt ? 1 : 0, shift: rec.e.shift ? 1 : 0}};
         el.classList.add('capturing');
-        if (label) label.textContent = 'press a key…';   // 'key' captures have no text label (armed mods light up on the board)
+        if (label) label.textContent = capturePromptText();   // shows any pre-armed mods; 'key' captures have no label (armed mods light up on the board)
         updateArmedVisuals();
     }
 
@@ -3801,20 +3925,27 @@
         afterLoad();
     }
 
-    // Start from the active game's bundled default file (no need to pick one first).
-    async function loadDefaults() {
-        if (!(GAME.codec && GAME.codec.loadDefault)) return;
-        setHint('loading defaults…');
+    // Start from a bundled profile the active game ships (no need to pick a file first) --
+    // shared by "Load defaults" (loadDefault) and the recommended layout (loadRecommended).
+    async function loadBundled(method, what) {
+        if (!(GAME.codec && GAME.codec[method])) return;
+        setHint('loading ' + what + '…');
         try {
-            state.doc = await GAME.codec.loadDefault(state.doc);
+            state.doc = await GAME.codec[method](state.doc);
         } catch (e) {
-            setHint('<span class="err">Could not load defaults: ' + (e && e.message || e) + '</span>');
+            setHint('<span class="err">Could not load ' + what + ': ' + (e && e.message || e) + '</span>');
             return;
         }
-        // Bundled defaults are authored in QWERTY; if the user is editing in Dvorak, convert them.
+        // Bundled profiles are authored in QWERTY; if the user is editing in Dvorak, convert them.
         if (layout === 'dvorak') remapDoc(buildVkMap(false));
         afterLoad();
     }
+
+    // Start from the active game's bundled default file (no need to pick one first).
+    function loadDefaults() { return loadBundled('loadDefault', 'defaults'); }
+
+    // Start from the active game's bundled recommended layout (overwrites current edits).
+    function loadRecommended() { return loadBundled('loadRecommended', 'the recommended layout'); }
 
     function afterLoad() {
         if (state.doc && state.doc.name) state.name = state.doc.name;   // codec may suggest a name from the file
@@ -3875,6 +4006,8 @@
     }
 
     // Apply a VK remap (from buildVkMap) to every remappable entry in the doc; returns the count.
+    // A game may also convert bindings it keeps outside the editable model (e.g. SC2 alternate keys
+    // and unmodelled co-op/campaign hotkeys) via the optional GAME.remapExtra hook.
     function remapDoc(m) {
         let n = 0;
         GAME.forEachEntry(state.doc, e => {
@@ -3883,6 +4016,7 @@
                 n++;
             }
         });
+        if (GAME.remapExtra) n += GAME.remapExtra(state.doc, m);
         return n;
     }
 
@@ -4069,6 +4203,7 @@ function modString(ctrl, alt, shift) {
 // common: {basic,hero,noAttack,tower}, buildCommands, campaignRaces }.  See data/SOURCE.md.
 var DATA = null;            // the raw dataset
 var DEFAULTS = '';          // bundled default CustomKeys.txt text (the "good defaults")
+var RECOMMENDED = null;     // bundled recommended layout { name, text } (a CustomKeys.txt), or null
 var NAMESDATA = {};         // code -> name from the SLK tables (data.names), for Miscellaneous labels
 var ITEMCAT = {};           // item code -> 'shop'|'powerup'|'campaign' (data.items, from itemdata.slk)
 var DEADUNIT = {};          // unit code -> 'unbuilt': a build/train hotkey nothing can issue (data.misc, gen_wc3_misc.py)
@@ -4110,6 +4245,7 @@ var COMMON_BY_TYPE = { unit: 'basic', summon: 'basic', hero: 'hero', item: 'hero
 function setData(d) {
   DATA = (d && d.units) ? d : null;
   DEFAULTS = (d && d.defaults) || '';
+  RECOMMENDED = (d && d.recommended) || null;
   NAMESDATA = (d && d.names) || {};
   ITEMCAT = (d && d.items) || {};
   DEADUNIT = (d && d.misc) || {};
@@ -4209,6 +4345,14 @@ function loadDefault(prev) {
   return loadFile({ text: function () { return Promise.resolve(DEFAULTS); } }, prev);
 }
 
+// Start from the bundled recommended layout (HotkeyFiles/RecommendedLayout/) instead of a picked
+// file -- parse its CustomKeys.txt text like loadDefault does.  Dormant until a file is dropped in.
+function loadRecommended(prev) {
+  if (!(RECOMMENDED && RECOMMENDED.text)) return Promise.reject(new Error('no bundled recommended layout'));
+  var text = RECOMMENDED.text;
+  return loadFile({ text: function () { return Promise.resolve(text); } }, prev);
+}
+
 function saveDoc(doc, _name) {
   // 1. Rewrite changed binding values in place (line indices stay stable).
   function valueFor(e) {
@@ -4282,7 +4426,7 @@ function bindings(doc) {
   if (!DATA) {
     return doc.binds.map(function (b) {
       return { e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key), name: b.section + KEY_SUFFIX[b.key],
-        group: rawGroup(b.key), hidden: false, chron: false };
+        group: rawGroup(b.key), hidden: false, campaign: false };
     });
   }
   var recs = [], used = {}, onCard = {};
@@ -4311,13 +4455,13 @@ function bindings(doc) {
     // with each other -- e.g. a research key of S must not clash with the active Stop command.
     var ch = slot.Hotkey ? 'active' : 'research';
     form = form || '';                                       // '' = base form; else the alt (morph) unit
-    recs.push({ e: primary, id: primary.id, unit: unit, set: set, ch: ch, form: form, name: name, group: group, hidden: false, chron: false });
+    recs.push({ e: primary, id: primary.id, unit: unit, set: set, ch: ch, form: form, name: name, group: group, hidden: false, campaign: false });
     // Unhotkey gets its own "— Off" row only for genuine two-state buttons (Call to Arms / Back
     // to Work etc., flagged by an UnhotkeyId) AND when it differs from the primary.  Most abilities
     // carry a leftover Unhotkey (e.g. Gather) that isn't a real player hotkey -- skip those so they
     // don't show up or raise spurious conflicts.
     if (slot.Unhotkey && slot.Unhotkey.sec.twoState && comboKey(slot.Unhotkey) !== comboKey(primary))
-      recs.push({ e: slot.Unhotkey, id: slot.Unhotkey.id, unit: unit, set: set, ch: 'active', form: form, name: name + ' — Off', group: group, hidden: false, chron: false });
+      recs.push({ e: slot.Unhotkey, id: slot.Unhotkey.id, unit: unit, set: set, ch: 'active', form: form, name: name + ' — Off', group: group, hidden: false, campaign: false });
   }
   // shared common-command cards (shown once each, not repeated under every unit)
   COMMON_ORDER.forEach(function (set) {
@@ -4348,16 +4492,16 @@ function bindings(doc) {
     var slot = doc.byCode[b.codeLc];
     if (slot && slot[b.key] && slot[b.key] !== b) {
       recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return;
+        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return;
     }
     // A verified-stale duplicate rawcode (checked first, since a couple are also item codes):
     // kept in the file, dropped from the list (hidden:true) so the live carded copy is what's shown.
     if (HIDE[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return; }
     var g = GLOBAL[b.sec.cmd];
     if (g) { recs.push({ e: b, id: b.id, unit: null, set: g.set, ch: channelOf(b.key),
       name: (GLOBAL_NAMES[b.codeLc] || nameOf(b)) + suffix,
-      group: g.group, hidden: false, chron: false }); return; }
+      group: g.group, hidden: false, campaign: false }); return; }
     // An unbuildable unit's templated build/train hotkey: WC3 gives every building/unit a build
     // command button, but a large family of neutral buildings (Mercenary Camps -- one rawcode per
     // tileset -- Dragon Roosts, Goblin Laboratory/Merchant/Shipyard, Tavern) is only ever *placed*
@@ -4365,22 +4509,22 @@ function bindings(doc) {
     // ability summons them; gen_wc3_misc.py -> DEADUNIT).  The build hotkey can never fire in a
     // match, so drop it from the list (still round-trips on save, like the hidden item templates).
     if (DEADUNIT[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return; }
     var it = ITEMCAT[b.codeLc];
     // 'hidden' item: a templated purchase hotkey no shop or drop/marketplace pool ever offers, so
     // it can't fire in a match -- drop it from the list (still round-trips on save, like HIDE above).
     if (it === 'hidden') { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return; }
     // 'melee' (neutral drop/marketplace/shop pool) or 'campaign' -> its own column, not Miscellaneous
     if (it) { recs.push({ e: b, id: b.id, unit: null, set: null, item: it, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: ITEM_LABEL[it], hidden: false, chron: false }); return; }
+      name: nameOf(b) + suffix, group: ITEM_LABEL[it], hidden: false, campaign: false }); return; }
     // Redundant orphan rawcode: the game already binds this ability under a different code that IS
     // carded (the name is already shown on some card), so this leftover can't add anything -- drop it
     // (still round-trips on save).  Skip engine cmd* commands, whose names ("Cancel") legitimately
     // repeat.
     if (!(/^cmd/i).test(b.codeLc) && cardedNames[nameOf(b)]) {
       recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return;
+        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return;
     }
     // Anything still here is not carded, not a recognized global command, not an item, and not a
     // producible unit -- the game data gives it no home: a dead generic pseudo-command (cmdbuild,
@@ -4389,8 +4533,13 @@ function bindings(doc) {
     // nameless dummy item.  It can't be shown in context, so drop it from the list (kept in the file,
     // round-trips on save).  This empties Miscellaneous for the melee dataset.
     recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false });
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false });
   });
+  // Campaign-only content (campaign-only units, campaign-race build menus, campaign items) shares
+  // the CAT_CAMPAIGN column bucket; flag it so the engine's "Show Campaign" toggle hides it by
+  // default.  The Miscellaneous catch-all also lands in that bucket but is hidden:true already, so
+  // it never reaches the campaign filter -- guard on !hidden anyway to keep the flag meaningful.
+  recs.forEach(function (r) { if (!r.hidden && catOf(r) === CAT_CAMPAIGN) r.campaign = true; });
   return recs;
 }
 
@@ -4663,7 +4812,6 @@ GAMES.warcraft3 = {
     fileAccept: '.txt',
     multiple: false,
     usesProfileName: false,       // the download is always CustomKeys.txt
-    hasChroniclesToggle: false,
     cardCols: 4, cardRows: 3,     // WC3 command card geometry for the card-grid panel (4 wide x 3 tall)
     pathHelp:
       '<div class="helpsubhead">To get started</div>'
@@ -4679,10 +4827,11 @@ GAMES.warcraft3 = {
       + 'hotkeys in the game\'s options.'
   },
   // file format: opaque doc in, packaged download out
-  codec: { load: loadFile, loadDefault: loadDefault, save: saveDoc, parse: parse, unparse: unparse, setValue: setValue },
+  codec: { load: loadFile, loadDefault: loadDefault, loadRecommended: loadRecommended, save: saveDoc, parse: parse, unparse: unparse, setValue: setValue },
   // WC3 has no extra mouse buttons or VK labels (the engine's letter/number VK table suffices)
   input: { vkLabels: {}, mouseButtons: [] },
   setData: setData,
+  hasRecommended: function () { return !!(RECOMMENDED && RECOMMENDED.text); },  // gate the "try my layout" box on a bundled layout (empty folder -> hidden)
   fileStatus: fileStatus,
   bindings: bindings,
   forEachEntry: forEachEntry,
@@ -4756,6 +4905,10 @@ GAMES.warcraft3 = {
         html('pathHelpBody', m.pathHelp);
         html('placeholder', m.placeholder);
         html('applyNote', m.applyNote);
+        // the "Allow global & local overlap" conflict option only applies to games with a
+        // global/override conflict tier (AoE2); other games hide it entirely
+        const gow = document.getElementById('globalOverlapWrap');
+        if (gow) gow.style.display = m.hasGlobalOverlapToggle ? '' : 'none';
         // optional "start from built-in defaults" button: only for games that bundle a default file
         const db = document.getElementById('loadDefaults'), dor = document.getElementById('loadOr');
         if (db) {
@@ -4764,7 +4917,21 @@ GAMES.warcraft3 = {
             db.style.display = has ? '' : 'none';
             if (dor) dor.style.display = has ? '' : 'none';
         }
+        updateRecommendedBox();
         buildFilterBar();
+    }
+
+    // optional "load the author's recommended layout" box: its copy lives in the HTML, so
+    // the engine only shows/hides it based on whether the active game bundles such a layout.
+    // A game may expose loadRecommended yet ship no layout (e.g. an empty RecommendedLayout/
+    // folder), so also honour its optional hasRecommended() runtime check when present.  This
+    // check reads GAME data (RECOMMENDED), which is populated by GAME.setData() -- run AFTER the
+    // first applyMeta() -- so applyData() must call this again once the dataset has loaded.
+    function updateRecommendedBox() {
+        const rbox = document.getElementById('recommendedBox');
+        const hasRec = !!(GAME.codec && GAME.codec.loadRecommended)
+            && (!GAME.hasRecommended || GAME.hasRecommended());
+        if (rbox) rbox.style.display = hasRec ? '' : 'none';
     }
 
     // Optional per-game list filter (e.g. WC3 races): buttons from GAME.filters, filtered via
@@ -4804,6 +4971,7 @@ GAMES.warcraft3 = {
     // ---- wire up ----
     document.getElementById('files').addEventListener('change', e => onFiles(e.target.files));
     document.getElementById('loadDefaults').addEventListener('click', loadDefaults);
+    document.getElementById('loadRecommended').addEventListener('click', loadRecommended);
     document.getElementById('search').addEventListener('input', e => {
         if (selectedKey) {
             selectedKey = null;
@@ -4823,11 +4991,19 @@ GAMES.warcraft3 = {
         showIcons = e.target.checked;
         paintCardIcons();   // repaint keyboard overlay + card grid
     });
-    document.getElementById('chronToggle').addEventListener('change', e => {
-        hideChronicles = !e.target.checked;
+    document.getElementById('campaignToggle').addEventListener('change', e => {
+        hideCampaign = !e.target.checked;
         buildModel();
         refreshKeyboard();
         renderList();
+    });
+    document.getElementById('globalOverlapToggle').addEventListener('change', e => {
+        allowGlobalOverlap = e.target.checked;   // only re-runs conflict classification; grouping is unaffected
+        if (dataReady) {
+            computeConflicts();
+            refreshKeyboard();
+            renderList();
+        }
     });
     // Hide/Show Conflicts button (in the panel header): collapses the panel body — leaving the
     // summary badge beside this button — and drops the per-command conflict styling; the button's
@@ -4906,7 +5082,8 @@ GAMES.warcraft3 = {
         set('showUnboundToggle', showUnboundOnly); // default off
         set('showIconsToggle', showIcons);       // default on
         set('preferKbToggle', !preferKbBinds);   // inverted switch: checked = Advanced Bind; default normal = unchecked
-        set('chronToggle', !hideChronicles);     // default off (Chronicles hidden)
+        set('campaignToggle', !hideCampaign);    // default off (campaign-only commands hidden)
+        set('globalOverlapToggle', allowGlobalOverlap); // default off (global-vs-local = hard conflict)
         const hc = document.getElementById('hideConflictsBtn');
         if (hc) hc.textContent = document.body.classList.contains('hide-conflicts') ? 'Show Conflicts' : 'Hide Conflicts';
         syncBindModeLabels();                    // match the Adv/Fast switch labels to preferKbBinds
@@ -4922,6 +5099,7 @@ GAMES.warcraft3 = {
     function applyData(d) {
         GAME.setData(d);   // module owns the data shape; engine just triggers the rebuild
         dataReady = true;    // dataset applied -> conflict computation/badge/panel may run
+        updateRecommendedBox();   // RECOMMENDED is only known now (post-setData); re-gate the box
         if (state.doc) {
             buildModel();
             computeConflicts();

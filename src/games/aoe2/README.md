@@ -50,10 +50,14 @@ generic engine, the build pipeline, and how a game module plugs in.
   has one (utility, control-group, hero-/military-selector, and campaign/scenario commands mostly
   don't) — unmatched commands just show no icon. Game UI assets bundled for display; see
   **Provenance / licensing**.
-- **`HotkeyFiles/`** — the bundled default profile, in the game's own on-disk structure:
+- **`HotkeyFiles/DefaultLayout/`** — the bundled default profile, in the game's own on-disk structure:
   `DefaultHotkeys.hkp` (shared menus) + `DefaultHotkeys/Base.hkp` (remappable system).
   `--build` base64-encodes both into the page (`.hkp` is binary) for the one-click
   **Load defaults** button (module `loadDefault`); if missing, the button is hidden.
+- **`HotkeyFiles/RecommendedLayout/`** — an optional bundled "recommended" profile in the same
+  two-file structure (`<Name>.hkp` + `<Name>/Base.hkp`). `--build` discovers the single `.hkp`
+  there and base64-encodes both halves into the page for the **"try my layout"** box (module
+  `loadRecommended`, gated on `hasRecommended()`); an empty/absent folder hides the box.
 - **`../../Example Key files/`** (repo root) — sample profiles for testing.
 
 ## Commands
@@ -195,6 +199,16 @@ three vendored files with **`--regen`** (needs a game install).
 ## Conflict detection (frontend `ctxClassify` + `computeConflicts`)
 The generic engine pairs up every two commands that share the exact combo (code+ctrl+alt+shift)
 and asks this module whether they can co-occur. AoE2's rules:
+- **Cross-mode (Chronicles vs standard)** → never clash, checked *first* in `ctxClassify`. Chronicles
+  (Battle for Greece) is a separate game mode, so a Chronicles command and a standard command are
+  never both active in one match — a shared key is not a conflict (e.g. **Dock** vs **Port**,
+  **Go to Dock** vs **Go to Port**, **Wonder** vs **Helepolis**, **Bombard Tower** vs **Macedonian
+  Command Post**). This keys on the rec's `campaign` flag (the same Chronicles-membership the
+  **Show Campaign** toggle filters on), *not* the `CAMP` context — most Chronicles commands reuse a
+  standard context code (Port is `B:eco`, like Dock), so the mode split is what disambiguates them.
+  Two Chronicles commands (e.g. **Hoplite** vs **Phalangite** on the Chronicles Barracks card), or
+  two standard commands, are still classified normally. This only matters with **Show Campaign** on
+  (otherwise Chronicles recs are filtered out before conflict detection).
 - **Mutex slots** (`MUTEX_GROUPS`, by command id; an id may sit in several groups) → never
   clash. For exclusions the id-keyed civ data can't resolve (generic slot names), each verified
   against the tech trees or in game: **Capped/Siege Ram techs** vs **Siege Elephant tech** (ram
@@ -240,7 +254,15 @@ and asks this module whether they can co-occur. AoE2's rules:
   Unique-Castle / Unique-Imperial slots every civ has at its Castle; civ-generic names so the
   dataset can't resolve them, but all civs always have all of them) → **confirmed**; otherwise a
   civ check by id (`civsForId` / `isUnitId`): both units + civ overlap → confirmed; building/tech
-  overlap → **possible**; civ-exclusive (no shared civ) → suppressed; can't civ-verify → **possible**.
+  overlap → **possible**; civ-exclusive (no shared civ) → suppressed; can't civ-verify → **same-slot
+  fallback**: two commands in the *same* command-card slot (`slotOf`, from `positions.json`) are
+  civ-exclusive alternatives (a civ's card holds one command per slot) → suppressed; different (or
+  unknown) slot → **possible**. This is what disambiguates **Chronicles** cards, whose civs are
+  excluded from `civ_data.json` so `civsForId` returns nothing: e.g. the Town Center's Economic
+  Town Center / Economic Policy / Polemarch (three Chronicles civs' take on one slot) share a key
+  but never coexist. It killed ~11 bogus same-slot Chronicles "possible" flags on the default
+  hotkeys; the few Chronicles pairs with *no* slot data (e.g. War Chariot vs Sannāhya, the Fort's
+  Unique-Imperial techs) stay **possible** — honestly unverifiable without Chronicles civ data.
 - different layers → no clash. Three tiers shown: **confirmed** (red ⚠), **possible** (amber ⚐),
   **override** (blue ⓘ). Civ availability is keyed by command id (`civ_data.json`), precomputed at
   `--regen` time by matching tech-tree node names to hotkey command names (`_norm_name`).
@@ -293,9 +315,10 @@ stays hidden for globals / unit / build-menu groups. Notes:
 ## AoE2-specific UI notes
 - **Mouse inputs** use VK codes **251–255** (ext buttons / middle / wheel up-down); the on-screen
   mouse exposes them as bindable keys.
-- **Chronicles** (Battle for Greece) content is hidden by default; a toggle reveals it. Hidden and
-  Chronicles entries are kept in state so **saving preserves them byte-for-byte** — hiding is
-  view-only.
+- **Chronicles** (Battle for Greece) content is AoE2's campaign-only content: each such rec carries
+  the engine's generic `campaign` flag, so it's hidden by default and revealed by the shared
+  **Show Campaign** toggle (the same toggle every game uses). Hidden and Chronicles entries are kept
+  in state so **saving preserves them byte-for-byte** — hiding is view-only.
 
 ## Gotchas
 - Save preserves hidden (Chronicles) entries byte-for-byte — hiding is view-only.

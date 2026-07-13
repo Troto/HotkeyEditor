@@ -279,6 +279,7 @@ let ICONS = {};              // command id -> ability-card icon basename (data/a
 let POSITIONS = {};          // command id -> command-card grid slot 0-14 (data/positions.json)
 let BUILD_POSITIONS = {};    // command id -> villager build-submenu slot 0-14 (data/build_menu_positions.json; a separate grid)
 let DEFAULTS = null;         // bundled default profile {profile,base} as base64 .hkp bytes
+let RECOMMENDED = null;      // bundled recommended ergonomic layout {name,profile,base} as base64 .hkp bytes
 function isChronName(n){ return /army tent|alexander.s army|\(campaign only\)/i.test(n||''); }
 
 // ---- building "bundle" groups ----
@@ -390,7 +391,7 @@ function buildEntries(doc){
         if(e.id<=0) return;
         const n=(occ.get(e.id)||0)+1; occ.set(e.id,n);
         list.push({e:e, id:e.id, occ:n, src:tag+'|'+label,
-                   chron: chronIds.has(e.id) || isChronName(strings[e.id]),
+                   campaign: chronIds.has(e.id) || isChronName(strings[e.id]),
                    hidden: hiddenIds.has(e.id)});
       });
     });
@@ -522,6 +523,12 @@ function uTypesOverlap(ta, tb){
                                                  // unload, only artillery attacks ground/packs)
 }
 function ctxClassify(ra, rb, opts){
+  // Chronicles (Battle for Greece) is a separate game mode from standard AoE2: its commands can
+  // never be active in the same match as a standard command, so a shared key across the two modes
+  // is not a conflict (e.g. Go to Dock vs Go to Port, Dock vs Port, Wonder vs Helepolis).  Two
+  // Chronicles commands -- or two standard ones -- still clash normally.  `campaign` is the same
+  // Chronicles-membership flag the "Show Campaign" toggle filters on. [[explicit-mutex-vs-civ-data]]
+  if(!!ra.campaign !== !!rb.campaign) return null;
   if(ISOLATED_IDS.has(ra.id) || ISOLATED_IDS.has(rb.id)) return null;   // isolated sub-mode, never clashes
   if(sameMutex(ra.id, rb.id)) return null;   // civ-exclusive alternative slots never clash
   const note=noteFor(ra.id, rb.id);
@@ -570,6 +577,13 @@ function ctxClassify(ra, rb, opts){
     if(fa && fb){ const ov=fa.filter(c=>fb.indexOf(c)>=0);
       if(!ov.length) return null;                             // civ-exclusive -> not a clash
       return (isUnitId(ra.id)&&isUnitId(rb.id)) ? {sev:'confirmed',civs:ov} : {sev:'possible',civs:ov}; }
+    // Same card, but civ availability isn't in the data (e.g. Chronicles civs, excluded from
+    // civ_data.json) so the civ check can't run.  Two commands in the *same command-card slot* are
+    // civ-exclusive alternatives -- a civ's card holds one command per slot, so no civ fields both
+    // and they never coexist -> not a clash (the slot is a derived mutex, cf. [[explicit-mutex-vs-civ-data]]).
+    // Only different slots (or missing slot data) fall through to a manual-review flag.
+    const sa=slotOf(ra), sb=slotOf(rb);
+    if(sa!=null && sb!=null && sa===sb) return null;
     return {sev:'possible'};                                  // same card, can't civ-verify -> flag for review
   }
   return null;
@@ -639,6 +653,18 @@ async function loadDefault(prev){
   doc.base = await parse(DEFAULTS.base);
   return doc;
 }
+// Start from the bundled recommended ergonomic layout (data/RecommendedLayout/, base64'd
+// into GAME_DATA by the generator) -- same shape as loadDefault, but also names the profile.
+async function loadRecommended(prev){
+  if(!(RECOMMENDED && RECOMMENDED.profile && RECOMMENDED.base)) throw new Error('no bundled recommended layout');
+  const doc = prev || { profile:null, base:null, name:null };
+  const parse = async b64 =>
+    hkp.parse(await hkp.inflateRaw(Uint8Array.from(atob(b64), c=>c.charCodeAt(0))));
+  doc.profile = await parse(RECOMMENDED.profile);
+  doc.base = await parse(RECOMMENDED.base);
+  if(RECOMMENDED.name) doc.name = RECOMMENDED.name;
+  return doc;
+}
 async function saveDoc(doc, name){
   const blob = await hkp.buildZip(name, doc&&doc.profile, doc&&doc.base);
   return { blob:blob, filename:name+'.zip',
@@ -669,7 +695,6 @@ GAMES.aoe2 = {
     fileAccept: '.hkp',
     multiple: true,
     usesProfileName: true,        // show the profile-name field (download is <Name>.zip)
-    hasChroniclesToggle: true,
     hasGlobalOverlapToggle: true, // offer the "Allow global & local overlap" conflict option (uses the G/override tier)
     cardCols: 5, cardRows: 3,     // AoE2 command card geometry for the card-grid panel (5 wide x 3 tall)
     pathHelp:
@@ -697,7 +722,7 @@ GAMES.aoe2 = {
   // file format: bytes <-> parsed doc, and download packaging
   // file format: the engine calls load()/save() (opaque doc in, packaged download out);
   // the lower-level parse/inflate/zip helpers are AoE2-internal (used by load/save above).
-  codec: { load:loadFile, loadDefault:loadDefault, save:saveDoc,
+  codec: { load:loadFile, loadDefault:loadDefault, loadRecommended:loadRecommended, save:saveDoc,
            parse:hkp.parse, unparse:hkp.unparse, inflate:hkp.inflateRaw,
            deflate:hkp.deflateRaw, buildZip:hkp.buildZip, buildZipBytes:hkp.buildZipBytes },
   // game-specific input: extra VK labels + the on-screen mouse buttons
@@ -723,10 +748,12 @@ GAMES.aoe2 = {
     POSITIONS = d.positions || {};
     BUILD_POSITIONS = d.build_positions || {};
     DEFAULTS = d.defaults || null;
+    RECOMMENDED = d.recommended || null;
     buildBundles();               // derive the per-building bundle membership from strings + card_data
   },
   fileStatus: fileStatus,        // load-status chips for the toolbar (doc, name) -> html
   isComplete: function(doc){ return !!(doc && doc.profile && doc.base); },  // need BOTH .hkp files before editing
+  hasRecommended: function(){ return !!(RECOMMENDED && RECOMMENDED.profile && RECOMMENDED.base); },  // gate the "try my layout" box on a bundled layout
 
   bindings: buildEntries,        // doc -> the engine's editable rec list
   forEachEntry: forEachEntry,    // iterate raw entries of a doc (used by the layout remap)

@@ -136,6 +136,7 @@ function modString(ctrl, alt, shift) {
 // common: {basic,hero,noAttack,tower}, buildCommands, campaignRaces }.  See data/SOURCE.md.
 var DATA = null;            // the raw dataset
 var DEFAULTS = '';          // bundled default CustomKeys.txt text (the "good defaults")
+var RECOMMENDED = null;     // bundled recommended layout { name, text } (a CustomKeys.txt), or null
 var NAMESDATA = {};         // code -> name from the SLK tables (data.names), for Miscellaneous labels
 var ITEMCAT = {};           // item code -> 'shop'|'powerup'|'campaign' (data.items, from itemdata.slk)
 var DEADUNIT = {};          // unit code -> 'unbuilt': a build/train hotkey nothing can issue (data.misc, gen_wc3_misc.py)
@@ -177,6 +178,7 @@ var COMMON_BY_TYPE = { unit: 'basic', summon: 'basic', hero: 'hero', item: 'hero
 function setData(d) {
   DATA = (d && d.units) ? d : null;
   DEFAULTS = (d && d.defaults) || '';
+  RECOMMENDED = (d && d.recommended) || null;
   NAMESDATA = (d && d.names) || {};
   ITEMCAT = (d && d.items) || {};
   DEADUNIT = (d && d.misc) || {};
@@ -276,6 +278,14 @@ function loadDefault(prev) {
   return loadFile({ text: function () { return Promise.resolve(DEFAULTS); } }, prev);
 }
 
+// Start from the bundled recommended layout (HotkeyFiles/RecommendedLayout/) instead of a picked
+// file -- parse its CustomKeys.txt text like loadDefault does.  Dormant until a file is dropped in.
+function loadRecommended(prev) {
+  if (!(RECOMMENDED && RECOMMENDED.text)) return Promise.reject(new Error('no bundled recommended layout'));
+  var text = RECOMMENDED.text;
+  return loadFile({ text: function () { return Promise.resolve(text); } }, prev);
+}
+
 function saveDoc(doc, _name) {
   // 1. Rewrite changed binding values in place (line indices stay stable).
   function valueFor(e) {
@@ -349,7 +359,7 @@ function bindings(doc) {
   if (!DATA) {
     return doc.binds.map(function (b) {
       return { e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key), name: b.section + KEY_SUFFIX[b.key],
-        group: rawGroup(b.key), hidden: false, chron: false };
+        group: rawGroup(b.key), hidden: false, campaign: false };
     });
   }
   var recs = [], used = {}, onCard = {};
@@ -378,13 +388,13 @@ function bindings(doc) {
     // with each other -- e.g. a research key of S must not clash with the active Stop command.
     var ch = slot.Hotkey ? 'active' : 'research';
     form = form || '';                                       // '' = base form; else the alt (morph) unit
-    recs.push({ e: primary, id: primary.id, unit: unit, set: set, ch: ch, form: form, name: name, group: group, hidden: false, chron: false });
+    recs.push({ e: primary, id: primary.id, unit: unit, set: set, ch: ch, form: form, name: name, group: group, hidden: false, campaign: false });
     // Unhotkey gets its own "— Off" row only for genuine two-state buttons (Call to Arms / Back
     // to Work etc., flagged by an UnhotkeyId) AND when it differs from the primary.  Most abilities
     // carry a leftover Unhotkey (e.g. Gather) that isn't a real player hotkey -- skip those so they
     // don't show up or raise spurious conflicts.
     if (slot.Unhotkey && slot.Unhotkey.sec.twoState && comboKey(slot.Unhotkey) !== comboKey(primary))
-      recs.push({ e: slot.Unhotkey, id: slot.Unhotkey.id, unit: unit, set: set, ch: 'active', form: form, name: name + ' — Off', group: group, hidden: false, chron: false });
+      recs.push({ e: slot.Unhotkey, id: slot.Unhotkey.id, unit: unit, set: set, ch: 'active', form: form, name: name + ' — Off', group: group, hidden: false, campaign: false });
   }
   // shared common-command cards (shown once each, not repeated under every unit)
   COMMON_ORDER.forEach(function (set) {
@@ -415,16 +425,16 @@ function bindings(doc) {
     var slot = doc.byCode[b.codeLc];
     if (slot && slot[b.key] && slot[b.key] !== b) {
       recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return;
+        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return;
     }
     // A verified-stale duplicate rawcode (checked first, since a couple are also item codes):
     // kept in the file, dropped from the list (hidden:true) so the live carded copy is what's shown.
     if (HIDE[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return; }
     var g = GLOBAL[b.sec.cmd];
     if (g) { recs.push({ e: b, id: b.id, unit: null, set: g.set, ch: channelOf(b.key),
       name: (GLOBAL_NAMES[b.codeLc] || nameOf(b)) + suffix,
-      group: g.group, hidden: false, chron: false }); return; }
+      group: g.group, hidden: false, campaign: false }); return; }
     // An unbuildable unit's templated build/train hotkey: WC3 gives every building/unit a build
     // command button, but a large family of neutral buildings (Mercenary Camps -- one rawcode per
     // tileset -- Dragon Roosts, Goblin Laboratory/Merchant/Shipyard, Tavern) is only ever *placed*
@@ -432,22 +442,22 @@ function bindings(doc) {
     // ability summons them; gen_wc3_misc.py -> DEADUNIT).  The build hotkey can never fire in a
     // match, so drop it from the list (still round-trips on save, like the hidden item templates).
     if (DEADUNIT[b.codeLc]) { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return; }
     var it = ITEMCAT[b.codeLc];
     // 'hidden' item: a templated purchase hotkey no shop or drop/marketplace pool ever offers, so
     // it can't fire in a match -- drop it from the list (still round-trips on save, like HIDE above).
     if (it === 'hidden') { recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return; }
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return; }
     // 'melee' (neutral drop/marketplace/shop pool) or 'campaign' -> its own column, not Miscellaneous
     if (it) { recs.push({ e: b, id: b.id, unit: null, set: null, item: it, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: ITEM_LABEL[it], hidden: false, chron: false }); return; }
+      name: nameOf(b) + suffix, group: ITEM_LABEL[it], hidden: false, campaign: false }); return; }
     // Redundant orphan rawcode: the game already binds this ability under a different code that IS
     // carded (the name is already shown on some card), so this leftover can't add anything -- drop it
     // (still round-trips on save).  Skip engine cmd* commands, whose names ("Cancel") legitimately
     // repeat.
     if (!(/^cmd/i).test(b.codeLc) && cardedNames[nameOf(b)]) {
       recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false }); return;
+        name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false }); return;
     }
     // Anything still here is not carded, not a recognized global command, not an item, and not a
     // producible unit -- the game data gives it no home: a dead generic pseudo-command (cmdbuild,
@@ -456,8 +466,13 @@ function bindings(doc) {
     // nameless dummy item.  It can't be shown in context, so drop it from the list (kept in the file,
     // round-trips on save).  This empties Miscellaneous for the melee dataset.
     recs.push({ e: b, id: b.id, unit: null, set: null, ch: channelOf(b.key),
-      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, chron: false });
+      name: nameOf(b) + suffix, group: 'Miscellaneous', hidden: true, campaign: false });
   });
+  // Campaign-only content (campaign-only units, campaign-race build menus, campaign items) shares
+  // the CAT_CAMPAIGN column bucket; flag it so the engine's "Show Campaign" toggle hides it by
+  // default.  The Miscellaneous catch-all also lands in that bucket but is hidden:true already, so
+  // it never reaches the campaign filter -- guard on !hidden anyway to keep the flag meaningful.
+  recs.forEach(function (r) { if (!r.hidden && catOf(r) === CAT_CAMPAIGN) r.campaign = true; });
   return recs;
 }
 
@@ -730,7 +745,6 @@ GAMES.warcraft3 = {
     fileAccept: '.txt',
     multiple: false,
     usesProfileName: false,       // the download is always CustomKeys.txt
-    hasChroniclesToggle: false,
     cardCols: 4, cardRows: 3,     // WC3 command card geometry for the card-grid panel (4 wide x 3 tall)
     pathHelp:
       '<div class="helpsubhead">To get started</div>'
@@ -746,10 +760,11 @@ GAMES.warcraft3 = {
       + 'hotkeys in the game\'s options.'
   },
   // file format: opaque doc in, packaged download out
-  codec: { load: loadFile, loadDefault: loadDefault, save: saveDoc, parse: parse, unparse: unparse, setValue: setValue },
+  codec: { load: loadFile, loadDefault: loadDefault, loadRecommended: loadRecommended, save: saveDoc, parse: parse, unparse: unparse, setValue: setValue },
   // WC3 has no extra mouse buttons or VK labels (the engine's letter/number VK table suffices)
   input: { vkLabels: {}, mouseButtons: [] },
   setData: setData,
+  hasRecommended: function () { return !!(RECOMMENDED && RECOMMENDED.text); },  // gate the "try my layout" box on a bundled layout (empty folder -> hidden)
   fileStatus: fileStatus,
   bindings: bindings,
   forEachEntry: forEachEntry,

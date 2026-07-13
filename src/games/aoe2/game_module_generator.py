@@ -486,7 +486,7 @@ def build(copy_icons=True):
         # Bundled default profile (both halves of an AoE2 profile) for the one-click
         # "Load defaults" button.  .hkp is binary (zip/deflate), so base64 it into the
         # json payload; module.js loadDefault decodes + parses both at runtime.
-        hk_dir = os.path.join(_HERE, 'HotkeyFiles')
+        hk_dir = os.path.join(_HERE, 'HotkeyFiles', 'DefaultLayout')
         with open(os.path.join(hk_dir, 'DefaultHotkeys.hkp'), 'rb') as f:
             prof_bytes = f.read()
         with open(os.path.join(hk_dir, 'DefaultHotkeys', 'Base.hkp'), 'rb') as f:
@@ -497,6 +497,29 @@ def build(copy_icons=True):
         }
     except FileNotFoundError as e:
         print('WARNING: %s missing; "Load defaults" button will be hidden' % e.filename)
+    try:
+        # Bundled "recommended" ergonomic layout (both halves of an AoE2 profile) for the
+        # one-click "Load ergonomic layout" button.  Discover the single profile .hkp in
+        # HotkeyFiles/RecommendedLayout/ and its <stem>/Base.hkp sibling; base64 both into the
+        # json payload (module.js loadRecommended decodes + parses at runtime, like defaults).
+        rec_dir = os.path.join(_HERE, 'HotkeyFiles', 'RecommendedLayout')
+        prof_hkps = [p for p in glob.glob(os.path.join(rec_dir, '*.hkp'))]
+        if not prof_hkps:
+            raise FileNotFoundError(os.path.join(rec_dir, '*.hkp'))
+        prof_path = prof_hkps[0]
+        stem = os.path.splitext(os.path.basename(prof_path))[0]
+        base_path = os.path.join(rec_dir, stem, 'Base.hkp')
+        with open(prof_path, 'rb') as f:
+            rec_prof_bytes = f.read()
+        with open(base_path, 'rb') as f:
+            rec_base_bytes = f.read()
+        data['recommended'] = {
+            'name': stem,
+            'profile': base64.b64encode(rec_prof_bytes).decode('ascii'),
+            'base': base64.b64encode(rec_base_bytes).decode('ascii'),
+        }
+    except FileNotFoundError as e:
+        print('WARNING: %s missing; "Load ergonomic layout" button will be hidden' % e.filename)
     site_dir = os.path.join(_ROOT, 'site')     # deployable (e.g. Cloudflare Pages output dir)
     out_path = os.path.join(site_dir, _GAME_SLUG, 'index.html')
     try:

@@ -98,12 +98,16 @@ comes from `_GAME_SLUG`, not the folder name.
   `Buttonpos` values, which aren't in the SLKs). See `data/SOURCE.md`.
 - **`HotkeyFiles/`** — sample/oracle `.txt` files (not read at runtime except the bundled default,
   which is inlined at build time):
-  - **`Sensible Reforged CustomKeys.txt`** — the canonical test fixture **and** the bundled
-    "Load defaults" file: the Reforged defaults merged with a community "sensible defaults" set
-    (see below). CRLF.
+  - **`DefaultLayout/Sensible Reforged CustomKeys.txt`** — the canonical test fixture **and** the
+    bundled "Load defaults" file: the Reforged defaults merged with a community "sensible defaults"
+    set (see below). CRLF.
   - **`Default Reforged CustomKeys.txt`** — the unmodified Reforged defaults (CRLF).
   - **`Old CustomKeys.txt`** — the original pre-Reforged sample (LF).
   - **`SensibleDefaults.txt`** — the community sensible-defaults source used to build the merge.
+  - **`RecommendedLayout/`** — an optional bundled "recommended" layout for the **"try my layout"**
+    box: `--build` inlines the single `CustomKeys.txt` there (module `loadRecommended`, gated on
+    `hasRecommended()`). Currently **empty**, so the box stays hidden; drop a `.txt` in and rebuild
+    to enable it.
 
 ## Commands
 - **Build**: `python3 games/Warcraft3/game_module_generator.py --build` → `site/warcraft3/index.html`
@@ -370,7 +374,7 @@ conflict-free starting set.
 ## Gotchas
 - The `CustomKeys.txt` mentions in `module.js` / the generator are the **game's real filename**
   (what users load and what the download is named) — not the repo test fixture. The fixture is
-  `HotkeyFiles/Sensible Reforged CustomKeys.txt`.
+  `HotkeyFiles/DefaultLayout/Sensible Reforged CustomKeys.txt`.
 - Case-folded section collisions: `byCode` keeps the first block (matching the game); the rest of
   the binds still round-trip on save.
 - A single command **group can't split across columns**, so a large group (e.g. **Neutral Items**,

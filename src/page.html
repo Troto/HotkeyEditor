@@ -297,6 +297,32 @@
             text-decoration: underline;
         }
 
+        /* "Load the author's recommended layout" box (button + copy), shown only when the
+           active game bundles a layout */
+        .reccorner {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+            margin-top: 6px;
+        }
+
+        .recbtn {
+            font: inherit;
+            font-size: 12px;
+            background: #1c2331;
+            color: #cfe0ff;
+            border: 1px solid #3a4150;
+            border-radius: 5px;
+            padding: 3px 9px;
+            cursor: pointer;
+        }
+
+        .recbtn:hover {
+            background: #232c3d;
+            border-color: #4a5468;
+        }
+
         h1 {
             margin: 0 0 8px;
             font-size: 17px;
@@ -1229,7 +1255,7 @@
         }
 
         .hdrleft {
-            flex: 0 1 auto;
+            flex: 1 1 auto;
             min-width: 0;
         }
 
@@ -1935,6 +1961,11 @@
             <div class="hint" id="hint"></div>
             <div class="sub dlnote" id="applyNote" style="margin-top:4px"></div>
         </div>
+        <div id="recommendedBox" class="reccorner" style="display:none">
+            <span style="font-size: 16px">Want to try my layout?</span>
+            <button id="loadRecommended" type="button" class="recbtn">Load My Layout</button>
+            <span class="ghnote" style="max-width: 180px">Ergonomic and performant</span>
+        </div>
     </div>
     <div class="hdrbind">
         <div class="hdrhelp">
@@ -2099,9 +2130,9 @@
                     <label class="tg"
                            title="Draw each command's ability art on its key (and on the command-card grid). Off shows the plain highlighted keys with their letters instead."><input
                             type="checkbox" id="showIconsToggle" checked autocomplete="off"> Show icons</label>
-                    <label class="tg" id="chronWrap" style="display:none"
-                           title="Show the hidden Chronicles (Battle for Greece) commands in the list. They're kept in saved files either way."><input
-                            type="checkbox" id="chronToggle" autocomplete="off"> Show Chronicles</label>
+                    <label class="tg" id="campaignWrap" style="display:none"
+                           title="Show campaign-only commands in the list (e.g. AoE2 Chronicles, WC3 campaign units/items). They're kept in saved files either way."><input
+                            type="checkbox" id="campaignToggle" autocomplete="off"> Show Campaign</label>
                     <label class="tg"
                            title="Show the number-pad block of the on-screen keyboard. Off by default so the rest of the keyboard is larger."><input
                             type="checkbox" id="showNumpadToggle" autocomplete="off"> Show numpad</label>
@@ -2166,9 +2197,9 @@
     let showIcons = true;        // "Show icons": draw ability art on keys + card grid (default on)
     let preferKbBinds = true;    // normal (keyboard) mode, the default: headings select (not collapse); no-icon commands show text on their key. The "Advanced Bind" switch is inverted — unchecked = normal, checked = Advanced Bind.
     let layout = 'qwerty';       // 'qwerty' | 'dvorak' — drives keybind conversion + key labels
-    let hideChronicles = true;   // Chronicles is a separate mode; hidden by default
+    let hideCampaign = true;     // campaign-only commands (e.g. AoE2 Chronicles, WC3 campaign content) are hidden by default
     let allowGlobalOverlap = false; // "Allow global & local overlap": off = global-vs-local is a hard conflict; on = override caution (passed to GAME.classify)
-    let hasChron = false;        // whether the loaded profile contains any Chronicles content
+    let hasCampaign = false;     // whether the loaded profile contains any campaign-only content
     const collapsed = new Set(); // collapsed group names (request 3)
 
     // ---- virtual-key code -> label ----
@@ -2262,10 +2293,10 @@
     let listFilter = null;         // active GAME.filters id (e.g. a WC3 race), or null = all
     function buildModel() {
         const full = GAME.bindings(state.doc).filter(r => !r.hidden);   // always drop hidden cmds (kept in state for saving)
-        hasChron = full.some(r => r.chron);
-        allRecs = hideChronicles ? full.filter(r => !r.chron) : full;   // chronicles entries also stay in state
-        const cw = document.getElementById('chronWrap');
-        if (cw) cw.style.display = hasChron ? '' : 'none';
+        hasCampaign = full.some(r => r.campaign);
+        allRecs = hideCampaign ? full.filter(r => !r.campaign) : full;   // campaign entries also stay in state
+        const cw = document.getElementById('campaignWrap');
+        if (cw) cw.style.display = hasCampaign ? '' : 'none';
         recsById = new Map();
         allRecs.forEach(r => {
             if (!recsById.has(r.id)) recsById.set(r.id, []);
@@ -3894,20 +3925,27 @@
         afterLoad();
     }
 
-    // Start from the active game's bundled default file (no need to pick one first).
-    async function loadDefaults() {
-        if (!(GAME.codec && GAME.codec.loadDefault)) return;
-        setHint('loading defaults…');
+    // Start from a bundled profile the active game ships (no need to pick a file first) --
+    // shared by "Load defaults" (loadDefault) and the recommended layout (loadRecommended).
+    async function loadBundled(method, what) {
+        if (!(GAME.codec && GAME.codec[method])) return;
+        setHint('loading ' + what + '…');
         try {
-            state.doc = await GAME.codec.loadDefault(state.doc);
+            state.doc = await GAME.codec[method](state.doc);
         } catch (e) {
-            setHint('<span class="err">Could not load defaults: ' + (e && e.message || e) + '</span>');
+            setHint('<span class="err">Could not load ' + what + ': ' + (e && e.message || e) + '</span>');
             return;
         }
-        // Bundled defaults are authored in QWERTY; if the user is editing in Dvorak, convert them.
+        // Bundled profiles are authored in QWERTY; if the user is editing in Dvorak, convert them.
         if (layout === 'dvorak') remapDoc(buildVkMap(false));
         afterLoad();
     }
+
+    // Start from the active game's bundled default file (no need to pick one first).
+    function loadDefaults() { return loadBundled('loadDefault', 'defaults'); }
+
+    // Start from the active game's bundled recommended layout (overwrites current edits).
+    function loadRecommended() { return loadBundled('loadRecommended', 'the recommended layout'); }
 
     function afterLoad() {
         if (state.doc && state.doc.name) state.name = state.doc.name;   // codec may suggest a name from the file
@@ -3968,6 +4006,8 @@
     }
 
     // Apply a VK remap (from buildVkMap) to every remappable entry in the doc; returns the count.
+    // A game may also convert bindings it keeps outside the editable model (e.g. SC2 alternate keys
+    // and unmodelled co-op/campaign hotkeys) via the optional GAME.remapExtra hook.
     function remapDoc(m) {
         let n = 0;
         GAME.forEachEntry(state.doc, e => {
@@ -3976,6 +4016,7 @@
                 n++;
             }
         });
+        if (GAME.remapExtra) n += GAME.remapExtra(state.doc, m);
         return n;
     }
 
@@ -4088,7 +4129,21 @@
             db.style.display = has ? '' : 'none';
             if (dor) dor.style.display = has ? '' : 'none';
         }
+        updateRecommendedBox();
         buildFilterBar();
+    }
+
+    // optional "load the author's recommended layout" box: its copy lives in the HTML, so
+    // the engine only shows/hides it based on whether the active game bundles such a layout.
+    // A game may expose loadRecommended yet ship no layout (e.g. an empty RecommendedLayout/
+    // folder), so also honour its optional hasRecommended() runtime check when present.  This
+    // check reads GAME data (RECOMMENDED), which is populated by GAME.setData() -- run AFTER the
+    // first applyMeta() -- so applyData() must call this again once the dataset has loaded.
+    function updateRecommendedBox() {
+        const rbox = document.getElementById('recommendedBox');
+        const hasRec = !!(GAME.codec && GAME.codec.loadRecommended)
+            && (!GAME.hasRecommended || GAME.hasRecommended());
+        if (rbox) rbox.style.display = hasRec ? '' : 'none';
     }
 
     // Optional per-game list filter (e.g. WC3 races): buttons from GAME.filters, filtered via
@@ -4128,6 +4183,7 @@
     // ---- wire up ----
     document.getElementById('files').addEventListener('change', e => onFiles(e.target.files));
     document.getElementById('loadDefaults').addEventListener('click', loadDefaults);
+    document.getElementById('loadRecommended').addEventListener('click', loadRecommended);
     document.getElementById('search').addEventListener('input', e => {
         if (selectedKey) {
             selectedKey = null;
@@ -4147,8 +4203,8 @@
         showIcons = e.target.checked;
         paintCardIcons();   // repaint keyboard overlay + card grid
     });
-    document.getElementById('chronToggle').addEventListener('change', e => {
-        hideChronicles = !e.target.checked;
+    document.getElementById('campaignToggle').addEventListener('change', e => {
+        hideCampaign = !e.target.checked;
         buildModel();
         refreshKeyboard();
         renderList();
@@ -4238,7 +4294,7 @@
         set('showUnboundToggle', showUnboundOnly); // default off
         set('showIconsToggle', showIcons);       // default on
         set('preferKbToggle', !preferKbBinds);   // inverted switch: checked = Advanced Bind; default normal = unchecked
-        set('chronToggle', !hideChronicles);     // default off (Chronicles hidden)
+        set('campaignToggle', !hideCampaign);    // default off (campaign-only commands hidden)
         set('globalOverlapToggle', allowGlobalOverlap); // default off (global-vs-local = hard conflict)
         const hc = document.getElementById('hideConflictsBtn');
         if (hc) hc.textContent = document.body.classList.contains('hide-conflicts') ? 'Show Conflicts' : 'Hide Conflicts';
@@ -4255,6 +4311,7 @@
     function applyData(d) {
         GAME.setData(d);   // module owns the data shape; engine just triggers the rebuild
         dataReady = true;    // dataset applied -> conflict computation/badge/panel may run
+        updateRecommendedBox();   // RECOMMENDED is only known now (post-setData); re-gate the box
         if (state.doc) {
             buildModel();
             computeConflicts();
